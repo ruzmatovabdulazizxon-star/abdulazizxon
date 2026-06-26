@@ -1,70 +1,93 @@
+const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
-const localVideo = document.getElementById('localVideo');
-const myPeerIdText = document.getElementById('my-peer-id');
-const roomInput = document.getElementById('room-input');
+const myVideo = document.createElement('video');
+myVideo.muted = true;
 
-let localStream;
-// PeerJS ob'ektini yaratamiz (u bepul bulutli serverga ulanadi)
-const peer = new Peer(); 
-
-// 1. Kamerani srazu yoqish
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-        localStream = stream;
-        localVideo.srcObject = stream;
-    })
-    .catch(err => console.error("Kamerani yoqib bo'lmadi:", err));
-
-// 2. PeerJS serverga ulanganda sizga noyob ID beradi
-peer.on('open', (id) => {
-    myPeerIdText.innerHTML = `Sizning Xona ID: <b style="color: #ccff00; font-size: 18px;">${id}</b> <br> <span style="font-size:12px; color:#aaa;">(Shu IDni sherigingizga bering)</span>`;
+const peer = new Peer(undefined, {
+    host: '/',
+    port: '443'
 });
 
-// 3. Kimgadir ulanish (Chaqiruv qilish)
-function connectToPeer() {
-    const remotePeerId = roomInput.value.trim();
-    if (!remotePeerId) return alert("Iltimos, sherigingizning ID raqamini kiriting!");
+let myVideoStream;
+const peers = {};
 
-    console.log("Chaqirilmoqda: " + remotePeerId);
-    
-    // Sherigimizga video oqimimizni uzatamiz
-    const call = peer.call(remotePeerId, localStream);
-    
-    // Sherigimiz javob berib o'z videosini yuborsa, ekranga qo'shamiz
-    call.on('stream', userVideoStream => {
-        addVideoStream(userVideoStream, remotePeerId);
+navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: true
+}).then(stream => {
+    myVideoStream = stream;
+    addVideoStream(myVideo, stream);
+
+    peer.on('call', call => {
+        call.answer(stream);
+        const video = document.createElement('video');
+        call.on('stream', userVideoStream => {
+            addVideoStream(video, userVideoStream);
+        });
     });
+
+    socket.on('user-connected', userId => {
+        connectToNewUser(userId, stream);
+    });
+
+    let text = document.getElementById('chat_message');
+    let msgButton = document.getElementById('send_message');
+
+    msgButton.addEventListener('click', () => {
+        if (text.value.length !== 0) {
+            socket.emit('message', text.value);
+            text.value = '';
+        }
+    });
+
+    text.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && text.value.length !== 0) {
+            socket.emit('message', text.value);
+            text.value = '';
+        }
+    });
+
+    socket.on('createMessage', message => {
+        let ul = document.getElementById('messages');
+        let li = document.createElement('li');
+        li.appendChild(document.createTextNode(message));
+        ul.appendChild(li);
+        scrollToBottom();
+    });
+});
+
+peer.on('open', id => {
+    document.getElementById('room-id').innerText = id;
+    
+    document.getElementById('join-room').addEventListener('click', () => {
+        const peerId = document.getElementById('peer-id').value;
+        if(peerId) {
+            connectToNewUser(peerId, myVideoStream);
+        }
+    });
+});
+
+function connectToNewUser(userId, stream) {
+    const call = peer.call(userId, stream);
+    const video = document.createElement('video');
+    call.on('stream', userVideoStream => {
+        addVideoStream(video, userVideoStream);
+    });
+    call.on('close', () => {
+        video.remove();
+    });
+    peers[userId] = call;
 }
 
-// 4. Kimdir bizga qo'ng'iroq qilsa (Chaqiruvni qabul qilish)
-peer.on('call', call => {
-    // Chaqiruvga o'z videomiz bilan javob beramiz
-    call.answer(localStream);
-    
-    // Uning videosini qabul qilib ekranga chiqaramiz
-    call.on('stream', userVideoStream => {
-        addVideoStream(userVideoStream, call.peer);
-    });
-});
-
-// Videoni ekranga chiroyli qilib qo'shish funksiyasi
-const connectedPeers = {};
-function addVideoStream(stream, peerId) {
-    if (connectedPeers[peerId]) return; // Agar video allaqachon bo'lsa, qayta qo'shma
-    
-    const videoDiv = document.createElement('div');
-    videoDiv.id = peerId;
-    
-    const title = document.createElement('h3');
-    title.innerText = `Suhbatdosh (${peerId.substring(0, 5)}...)`;
-    
-    const video = document.createElement('video');
+function addVideoStream(video, stream) {
     video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    
-    videoDiv.append(title, video);
-    videoGrid.append(videoDiv);
-    
-    connectedPeers[peerId] = stream;
+    video.addEventListener('loadedmetadata', () => {
+        video.play();
+    });
+    videoGrid.append(video);
+}
+
+function scrollToBottom() {
+    let d = document.querySelector('.main__chat_window');
+    d.scrollTop = d.scrollHeight;
 }
