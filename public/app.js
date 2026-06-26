@@ -1,93 +1,106 @@
-const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
-const myVideo = document.createElement('video');
-myVideo.muted = true;
+const localVideo = document.getElementById('localVideo');
+const myPeerIdText = document.getElementById('my-peer-id');
+const roomInput = document.getElementById('room-input');
+const chatDiv = document.getElementById('chat');
+const messageInput = document.getElementById('messageInput');
 
-const peer = new Peer(undefined, {
-    host: '/',
-    port: '443'
+let localStream;
+let currentCall = null;
+let dataConnection = null; // Chat xabarlarini uzatish uchun
+
+// PeerJS ob'ektini yaratamiz
+const peer = new Peer();
+
+// 1. Kamerani srazu yoqish
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+    })
+    .catch(err => console.error("Kamerani yoqib bo'lmadi:", err));
+
+// 2. PeerJS serverga ulanganda sizga noyob ID beradi
+peer.on('open', (id) => {
+    myPeerIdText.innerHTML = `Sizning Xona ID: <b style="color: #ccff00; font-size: 18px;">${id}</b> <br> <span style="font-size:12px; color:#aaa;">(Shu IDni sherigingizga bering)</span>`;
 });
 
-let myVideoStream;
-const peers = {};
+// 3. Xonaga ulanish tugmasi bosilganda (Chaqiruv qilish)
+function connectToPeer() {
+    const remotePeerId = roomInput.value.trim();
+    if (!remotePeerId) return alert("Iltimos, sherigingizning ID raqamini kiriting!");
 
-navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true
-}).then(stream => {
-    myVideoStream = stream;
-    addVideoStream(myVideo, stream);
+    console.log("Chaqirilmoqda: " + remotePeerId);
 
-    peer.on('call', call => {
-        call.answer(stream);
-        const video = document.createElement('video');
-        call.on('stream', userVideoStream => {
-            addVideoStream(video, userVideoStream);
-        });
-    });
+    // Video aloqani o'rnatish
+    const call = peer.call(remotePeerId, localStream);
+    handleCall(call);
 
-    socket.on('user-connected', userId => {
-        connectToNewUser(userId, stream);
-    });
+    // Chat aloqasini (Data Connection) o'rnatish
+    const conn = peer.connect(remotePeerId);
+    handleConnection(conn);
+}
 
-    let text = document.getElementById('chat_message');
-    let msgButton = document.getElementById('send_message');
-
-    msgButton.addEventListener('click', () => {
-        if (text.value.length !== 0) {
-            socket.emit('message', text.value);
-            text.value = '';
-        }
-    });
-
-    text.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && text.value.length !== 0) {
-            socket.emit('message', text.value);
-            text.value = '';
-        }
-    });
-
-    socket.on('createMessage', message => {
-        let ul = document.getElementById('messages');
-        let li = document.createElement('li');
-        li.appendChild(document.createTextNode(message));
-        ul.appendChild(li);
-        scrollToBottom();
-    });
+// 4. Kimdir bizga qo'ng'iroq qilganda (Chaqiruvni qabul qilish)
+peer.on('call', (call) => {
+    call.answer(localStream);
+    handleCall(call);
 });
 
-peer.on('open', id => {
-    document.getElementById('room-id').innerText = id;
+// 5. Kimdir bizga chat uchun ulanmoqchi bo'lganida
+peer.on('connection', (conn) => {
+    handleConnection(conn);
+});
+
+// Video oqimni boshqarish funksiyasi
+function handleCall(call) {
+    currentCall = call;
+    call.on('stream', (userVideoStream) => {
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = userVideoStream;
+        }
+    });
+}
+
+// Chat ulanishini boshqarish funksiyasi
+function handleConnection(conn) {
+    dataConnection = conn;
     
-    document.getElementById('join-room').addEventListener('click', () => {
-        const peerId = document.getElementById('peer-id').value;
-        if(peerId) {
-            connectToNewUser(peerId, myVideoStream);
-        }
+    dataConnection.on('data', (data) => {
+        appendMessage("Suhbatdosh: " + data);
     });
+}
+
+// 6. Xabar yuborish funksiyasi
+function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
+
+    // Ekranga o'zimiz yozgan xabarni chiqarish
+    appendMessage("Siz: " + message);
+
+    // Agar sherigimizga ulangan bo'lsak, unga ham xabarni yuboramiz
+    if (dataConnection && dataConnection.open) {
+        dataConnection.send(message);
+    }
+
+    messageInput.value = ""; // Inputni tozalash
+}
+
+// Ekran chat oynasiga matn qo'shish funksiyasi
+function appendMessage(text) {
+    const msgElement = document.createElement('div');
+    msgElement.innerText = text;
+    msgElement.style.padding = "5px 10px";
+    msgElement.style.borderBottom = "1px solid #333";
+    chatDiv.appendChild(msgElement);
+    chatDiv.scrollTop = chatDiv.scrollHeight; // Avtomatik pastga tushirish
+}
+
+// Enter tugmasi bosilganda ham xabar ketsin
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.activeElement === messageInput) {
+        sendMessage();
+    }
 });
-
-function connectToNewUser(userId, stream) {
-    const call = peer.call(userId, stream);
-    const video = document.createElement('video');
-    call.on('stream', userVideoStream => {
-        addVideoStream(video, userVideoStream);
-    });
-    call.on('close', () => {
-        video.remove();
-    });
-    peers[userId] = call;
-}
-
-function addVideoStream(video, stream) {
-    video.srcObject = stream;
-    video.addEventListener('loadedmetadata', () => {
-        video.play();
-    });
-    videoGrid.append(video);
-}
-
-function scrollToBottom() {
-    let d = document.querySelector('.main__chat_window');
-    d.scrollTop = d.scrollHeight;
-}
