@@ -9,8 +9,12 @@ let localStream;
 let currentCall = null;
 let dataConnection = null; // Chat xabarlarini uzatish uchun
 
-// PeerJS ob'ektini yaratamiz
-const peer = new Peer();
+// PeerJS ni shaxsiy Render serverimizga ulaymiz
+const peer = new Peer(undefined, {
+    host: '/',
+    port: location.protocol === 'https:' ? 443 : 3000,
+    path: '/peerjs'
+});
 
 // 1. Kamerani srazu yoqish
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
