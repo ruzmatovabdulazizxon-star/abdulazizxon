@@ -9,13 +9,13 @@ let localStream;
 let currentCall = null;
 let dataConnection = null; // Chat xabarlarini uzatish uchun
 
-// PeerJS ni shaxsiy Render serverimizga ulaymiz
+// PeerJS ni Render serveriga xavfsiz (SSL) protokol bilan ulaymiz
 const peer = new Peer(undefined, {
     host: '/',
-    port: location.protocol === 'https:' ? 443 : 3000,
-    path: '/peerjs'
+    port: 443,
+    path: '/peerjs',
+    secure: true
 });
-
 // 1. Kamerani srazu yoqish
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     .then(stream => {
