@@ -1,7 +1,7 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-// O'zimizga tasodifiy 6 xonali ID yaratish
+// Tasodifiy 6 xonali ID (Masalan: 688230)
 const myCustomPeerId = Math.floor(100000 + Math.random() * 900000).toString();
 
 const peer = new Peer(myCustomPeerId, {
@@ -12,9 +12,8 @@ const peer = new Peer(myCustomPeerId, {
 });
 
 let myStream;
-const connectedPeers = {}; // Ulangan odamlarni eslab qolish uchun
+const connectedPeers = {}; // Faol qo'ng'iroqlarni saqlash uchun
 
-// Kamera va mikrofonni yoqish hamda o'z videomizni grid-ga qo'shish
 navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
@@ -22,42 +21,60 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, "Siz (Kamera)", myCustomPeerId);
 
-    // Boshqa birov bizga qo'ng'iroq qilib ID orqali ulansa, unga javob berish
+    // Kimdir bizga qo'ng'iroq qilsa (eski mehmon yoki yangi mehmon) javob beramiz
     peer.on('call', call => {
         call.answer(stream);
         call.on('stream', userRemoteStream => {
             addVideoStyle(userRemoteStream, `Suhbatdosh (${call.peer})`, call.peer);
         });
     });
+
+    // SOKET LOGIKASI: Xonaga yangi odam kirdi degan xabar kelsa, unga AVTOMATIK qo'ng'iroq qilamiz!
+    socket.on('user-connected', (userId) => {
+        console.log('Yangi foydalanuvchi qo\'shildi: ' + userId);
+        // Biroz kutish (Peer ulanishga ulgurishi uchun)
+        setTimeout(() => {
+            connectToUser(userId, stream);
+        }, 1000);
+    });
+
 }).catch(err => {
-    console.error("Kameraga ruxsat berilmadi:", err);
+    console.error("Kamera ruxsatnomasi xatosi:", err);
 });
 
 peer.on('open', id => {
     document.getElementById('my-peer-id').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 22px;">${id}</span>`;
+    // Biz 'main-room' degan bitta umumiy guruh xonasiga ulanamiz
     socket.emit('join-room', 'main-room', id);
 });
 
-// ID kiritib ulanish funksiyasi
-function connectToPeer() {
-    const remotePeerId = document.getElementById('room-input').value.trim();
-    if (!remotePeerId) return alert("Iltimos, Xona ID raqamini kiriting!");
-    if (remotePeerId === myCustomPeerId) return alert("O'zingizning ID raqamingizga ulanolmaysiz!");
-    if (connectedPeers[remotePeerId]) return alert("Bu foydalanuvchiga allaqachon ulangansiz!");
+// Avtomatik o'zaro bog'lanish funksiyasi
+function connectToUser(userId, stream) {
+    if (connectedPeers[userId]) return; // Agar allaqachon ulanish bo'lsa qayta ulamaymiz
 
-    console.log("Qo'ng'iroq qilinmoqda: " + remotePeerId);
-    const call = peer.call(remotePeerId, myStream);
-    
+    const call = peer.call(userId, stream);
     call.on('stream', userRemoteStream => {
-        addVideoStyle(userRemoteStream, `Suhbatdosh (${remotePeerId})`, remotePeerId);
+        addVideoStyle(userRemoteStream, `Suhbatdosh (${userId})`, userId);
     });
 
-    connectedPeers[remotePeerId] = call;
+    call.on('close', () => {
+        removeVideo(userId);
+    });
+
+    connectedPeers[userId] = call;
 }
 
-// Grid ichiga chiroyli qilib video va uning sarlavhasini dinamik qo'shish funksiyasi
+// Qo'lda ulanish tugmasi uchun (agar kerak bo'lib qolsa)
+function connectToPeer() {
+    const remotePeerId = document.getElementById('room-input').value.trim();
+    if (!remotePeerId) return alert("Xona ID raqamini kiriting!");
+    if (remotePeerId === myCustomPeerId) return alert("O'zingizga ulanolmaysiz!");
+    
+    connectToUser(remotePeerId, myStream);
+}
+
+// Dinamik ravishda ekranga video qutisini qo'shish
 function addVideoStyle(stream, titleText, peerId) {
-    // Agar bu odamning videosi ekranda allaqachon bo'lsa, qayta yaratmaymiz
     if (document.getElementById(`div-${peerId}`)) return;
 
     const box = document.createElement('div');
@@ -71,17 +88,28 @@ function addVideoStyle(stream, titleText, peerId) {
     video.srcObject = stream;
     video.autoplay = true;
     video.playsInline = true;
-    if (peerId === myCustomPeerId) video.muted = true; // O'z ovozimiz o'zimizga qayta eshitilmasligi uchun
+    if (peerId === myCustomPeerId) video.muted = true;
 
     box.appendChild(title);
     box.appendChild(video);
     videoGrid.appendChild(box);
 }
 
-// Chat xabarlarini qabul qilish
+// Kimdir chiqib ketsa, uning videosini o'chirish
+socket.on('user-disconnected', userId => {
+    if (connectedPeers[userId]) connectedPeers[userId].close();
+    removeVideo(userId);
+});
+
+function removeVideo(userId) {
+    const videoDiv = document.getElementById(`div-${userId}`);
+    if (videoDiv) videoDiv.remove();
+}
+
+// Chat logikasi
 socket.on('createMessage', (message, userId) => {
     const chat = document.getElementById('chat');
-    chat.innerHTML += `<div><b>Foydalanuvchi (${userId.substring(0,4)}):</b> ${message}</div>`;
+    chat.innerHTML += `<div><b>ID (${userId.substring(0,4)}):</b> ${message}</div>`;
     chat.scrollTop = chat.scrollHeight;
 });
 
