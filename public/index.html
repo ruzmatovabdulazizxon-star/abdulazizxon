@@ -3,126 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma (Guruhli Tizim)</title>
-    
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <title>Zoom Mini-Platforma (WebRTC)</title>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #141414;
-            color: white;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 { color: #8ab4f8; margin-bottom: 10px; }
-        
-        #room-header {
-            background: #202124;
-            padding: 15px 30px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        /* Video paneli - hamma foydalanuvchilar grid ichiga joylashadi */
-        #video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 20px;
-            width: 100%;
-            max-width: 1200px;
-            margin-bottom: 20px;
-        }
-        video {
-            width: 100%;
-            height: 240px;
-            background: #222;
-            border-radius: 12px;
-            object-fit: cover;
-            border: 2px solid #3c4043;
-            transform: scaleX(-1); /* O'zimizni kamerada to'g'ri ko'rish uchun */
-        }
-
-        /* Kod orqali boshqa xonaga o'tish bo'limi */
-        #join-box {
-            margin: 15px 0;
-        }
-        input {
-            padding: 10px;
-            font-size: 16px;
-            border-radius: 6px;
-            border: none;
-            outline: none;
-            width: 200px;
-            text-align: center;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 6px;
-            border: none;
-            background: #1a73e8;
-            color: white;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        button:hover { background: #1557b0; }
-
-        /* Guruh chati */
-        #chat-container {
-            width: 100%;
-            max-width: 450px;
-            background: #202124;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        #chat {
-            height: 200px;
-            overflow-y: auto;
-            border: 1px solid #3c4043;
-            background: #1a1a1a;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            text-align: left;
-        }
-        #chat-form {
-            display: flex;
-        }
-        #chat-form input { flex: 1; text-align: left; }
+        body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; padding: 20px; text-align: center; }
+        h1 { color: #8ab4f8; }
+        .main-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+        .video-box { background: #202124; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .video-container { display: flex; gap: 20px; }
+        video { width: 350px; height: 260px; background: black; border-radius: 8px; object-fit: cover; }
+        .chat-box { background: #202124; padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #chat { height: 200px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; margin-bottom: 10px; }
+        input { padding: 10px; border-radius: 6px; border: none; width: 70%; }
+        button { padding: 10px 15px; border-radius: 6px; border: none; background: #1a73e8; color: white; cursor: pointer; font-weight: bold; }
+        #room-input { width: 60%; margin-bottom: 10px; text-align: center; }
+        .info-panel { background: #202124; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: inline-block; }
     </style>
 </head>
 <body>
 
-    <h1>Zoom Mini-Platforma</h1>
+    <h1>Zoom Mini-Platforma (WebRTC)</h1>
 
-    <div id="room-header">
-        <div id="my-peer-id">Xona yuklanmoqda...</div>
-    </div>
-
-    <div id="join-box">
-        <input type="text" id="room-input" placeholder="Xona kodini kiriting...">
-        <button onclick="connectToPeer()">Xonaga o'tish</button>
-    </div>
-
-    <div id="video-grid">
-        <div>
-            <h3 style="text-align:center; margin: 5px;">Siz (Kamera)</h3>
-            <video id="localVideo" autoplay playsinline muted></video>
+    <div class="info-panel">
+        <div id="my-peer-id" style="font-weight: bold; font-size: 18px;">Xona ID yuklanmoqda...</div>
+        <div style="margin-top: 10px;">
+            <input type="text" id="room-input" placeholder="Sherigingizning Xona ID raqamini kiriting">
+            <button onclick="connectToPeer()">Xonaga ulanish</button>
         </div>
     </div>
 
-    <div id="chat-container">
-        <h3 style="margin-top:0;">Guruh Chati</h3>
-        <div id="chat"></div>
-        <div id="chat-form">
+    <div class="main-container">
+        <div class="video-box">
+            <div class="video-container">
+                <div>
+                    <h3>Siz (Kamera)</h3>
+                    <video id="localVideo" autoplay playsinline muted></video>
+                </div>
+                <div>
+                    <h3>Suhbatdosh</h3>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-box">
+            <h3>Jonli Chat</h3>
+            <div id="chat"></div>
             <input type="text" id="messageInput" placeholder="Xabar yozing...">
             <button onclick="sendMessage()">Yuborish</button>
         </div>
