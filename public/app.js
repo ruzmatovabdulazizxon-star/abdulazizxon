@@ -1,118 +1,60 @@
-const socket = io('/');
-const videoGrid = document.getElementById('video-grid');
-const localVideo = document.getElementById('localVideo');
-const myPeerIdText = document.getElementById('my-peer-id');
-const roomInput = document.getElementById('room-input');
-const chatDiv = document.getElementById('chat');
-const messageInput = document.getElementById('messageInput');
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoom Mini-Platforma (WebRTC)</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; padding: 20px; text-align: center; }
+        h1 { color: #8ab4f8; }
+        .main-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+        .video-box { background: #202124; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .video-container { display: flex; gap: 20px; }
+        video { width: 350px; height: 260px; background: black; border-radius: 8px; object-fit: cover; }
+        .chat-box { background: #202124; padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #chat { height: 200px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; margin-bottom: 10px; }
+        input { padding: 10px; border-radius: 6px; border: none; width: 70%; }
+        button { padding: 10px 15px; border-radius: 6px; border: none; background: #1a73e8; color: white; cursor: pointer; font-weight: bold; }
+        #room-input { width: 60%; margin-bottom: 10px; text-align: center; }
+        .info-panel { background: #202124; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: inline-block; }
+    </style>
+</head>
+<body>
 
-// URL'dan 6 xonali xona kodini olamiz
-const ROOM_ID = window.location.pathname.substring(1);
+    <h1>Zoom Mini-Platforma (WebRTC)</h1>
 
-let localStream;
-const peers = {}; // Ulangan har bir sherikni nazorat qilish uchun
+    <div class="info-panel">
+        <div id="my-peer-id" style="font-weight: bold; font-size: 18px;">Xona ID yuklanmoqda...</div>
+        <div style="margin-top: 10px;">
+            <input type="text" id="room-input" placeholder="Sherigingizning Xona ID raqamini kiriting">
+            <button onclick="connectToPeer()">Xonaga ulanish</button>
+        </div>
+    </div>
 
-// Xona kodini ekranga chiqarish
-myPeerIdText.innerHTML = `Xona Kodu: <b style="color: #ccff00; font-size: 24px; letter-spacing: 2px;">${ROOM_ID}</b><br><span style="font-size:12px; color:#aaa;">Sheriklaringizga shu sahifa linkini yuboring!</span>`;
+    <div class="main-container">
+        <div class="video-box">
+            <div class="video-container">
+                <div>
+                    <h3>Siz (Kamera)</h3>
+                    <video id="localVideo" autoplay playsinline muted></video>
+                </div>
+                <div>
+                    <h3>Suhbatdosh</h3>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                </div>
+            </div>
+        </div>
 
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-        localStream = stream;
-        localVideo.srcObject = stream;
+        <div class="chat-box">
+            <h3>Jonli Chat</h3>
+            <div id="chat"></div>
+            <input type="text" id="messageInput" placeholder="Xabar yozing...">
+            <button onclick="sendMessage()">Yuborish</button>
+        </div>
+    </div>
 
-        // Xavfsiz portlar bilan Peer serverga ulanamiz
-        const peer = new Peer(undefined, {
-            host: '/',
-            port: 443,
-            path: '/peerjs',
-            secure: true
-        });
-
-        peer.on('open', (userId) => {
-            // Serverga aynan shu xonaga kirganimizni bildiramiz
-            socket.emit('join-room', ROOM_ID, userId);
-        });
-
-        // Xonadagi eski foydalanuvchilar bizga qo'ng'iroq qilganda
-        peer.on('call', (call) => {
-            call.answer(stream);
-            const video = document.createElement('video');
-            call.on('stream', (userVideoStream) => {
-                addVideoStream(video, userVideoStream);
-            });
-        });
-
-        // Xonaga yangi foydalanuvchi qo'shilsa, unga srazu qo'ng'iroq qilamiz
-        socket.on('user-connected', (userId) => {
-            connectToNewUser(userId, stream, peer);
-        });
-    })
-    .catch(err => console.error("Kamera ulanishida xato:", err));
-
-// Kimdir chiqib ketsa, videosini tozalaymiz
-socket.on('user-disconnected', (userId) => {
-    if (peers[userId]) peers[userId].close();
-});
-
-function connectToNewUser(userId, stream, peer) {
-    const call = peer.call(userId, stream);
-    const video = document.createElement('video');
-    
-    call.on('stream', (userVideoStream) => {
-        addVideoStream(video, userVideoStream);
-    });
-    
-    call.on('close', () => {
-        video.remove();
-    });
-
-    peers[userId] = call;
-}
-
-// Videolarni dinamik ravishda guruh gridiga qo'shish
-function addVideoStream(video, stream) {
-    video.srcObject = stream;
-    video.addEventListener('loadedmetadata', () => {
-        video.play();
-    });
-    
-    const videoContainer = document.createElement('div');
-    const title = document.createElement('h3');
-    title.style.textAlign = "center";
-    title.style.margin = "5px";
-    title.innerText = "Suhbatdosh";
-    
-    videoContainer.appendChild(title);
-    videoContainer.appendChild(video);
-    videoGrid.appendChild(videoContainer);
-}
-
-// Boshqa xona kodini yozib kirganda
-function connectToPeer() {
-    const targetRoom = roomInput.value.trim();
-    if (!targetRoom) return alert("Xona kodini kiriting!");
-    window.location.href = `/${targetRoom}`;
-}
-
-// CHAT FUNKSIYASI (Socket.io orqali guruhdagi hammaga tarqaladi)
-function sendMessage() {
-    const message = messageInput.value.trim();
-    if (!message) return;
-    socket.emit('message', message);
-    messageInput.value = "";
-}
-
-socket.on('createMessage', (message, userId) => {
-    const msgElement = document.createElement('div');
-    msgElement.innerHTML = `<b style="color:#8ab4f8;">ID ${userId.substring(0, 4)}:</b> ${message}`;
-    msgElement.style.padding = "5px 0";
-    msgElement.style.borderBottom = "1px solid #333";
-    chatDiv.appendChild(msgElement);
-    chatDiv.scrollTop = chatDiv.scrollHeight;
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && document.activeElement === messageInput) {
-        sendMessage();
-    }
-});
+    <script src="app.js"></script>
+</body>
+</html>
