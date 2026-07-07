@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zoom Mini-Platforma (Guruhli Tizim)</title>
-    <script src="/socket.io/socket.io.js"></script>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,7 +30,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        /* Video paneli - hamma kelgan foydalanuvchilar grid ichiga joylashadi */
+        /* Video paneli - hamma foydalanuvchilar grid ichiga joylashadi */
         #video-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -44,10 +46,10 @@
             border-radius: 12px;
             object-fit: cover;
             border: 2px solid #3c4043;
-            transform: scaleX(-1); /* O'zimizni ko'zgudagidek ko'rish uchun */
+            transform: scaleX(-1); /* O'zimizni kamerada to'g'ri ko'rish uchun */
         }
 
-        /* Qisqa kod orqali boshqa xonaga o'tish bo'limi */
+        /* Kod orqali boshqa xonaga o'tish bo'limi */
         #join-box {
             margin: 15px 0;
         }
@@ -72,7 +74,7 @@
         }
         button:hover { background: #1557b0; }
 
-        /* Umumiy guruh chati */
+        /* Guruh chati */
         #chat-container {
             width: 100%;
             max-width: 450px;
