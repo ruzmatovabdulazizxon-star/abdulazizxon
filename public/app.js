@@ -1,7 +1,6 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-// Tasodifiy 6 xonali ID (Masalan: 688230)
 const myCustomPeerId = Math.floor(100000 + Math.random() * 900000).toString();
 
 const peer = new Peer(myCustomPeerId, {
@@ -12,7 +11,7 @@ const peer = new Peer(myCustomPeerId, {
 });
 
 let myStream;
-const connectedPeers = {}; // Faol qo'ng'iroqlarni saqlash uchun
+const connectedPeers = {}; 
 
 navigator.mediaDevices.getUserMedia({
     video: true,
@@ -21,7 +20,6 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, "Siz (Kamera)", myCustomPeerId);
 
-    // Kimdir bizga qo'ng'iroq qilsa (eski mehmon yoki yangi mehmon) javob beramiz
     peer.on('call', call => {
         call.answer(stream);
         call.on('stream', userRemoteStream => {
@@ -29,10 +27,8 @@ navigator.mediaDevices.getUserMedia({
         });
     });
 
-    // SOKET LOGIKASI: Xonaga yangi odam kirdi degan xabar kelsa, unga AVTOMATIK qo'ng'iroq qilamiz!
     socket.on('user-connected', (userId) => {
         console.log('Yangi foydalanuvchi qo\'shildi: ' + userId);
-        // Biroz kutish (Peer ulanishga ulgurishi uchun)
         setTimeout(() => {
             connectToUser(userId, stream);
         }, 1000);
@@ -44,13 +40,41 @@ navigator.mediaDevices.getUserMedia({
 
 peer.on('open', id => {
     document.getElementById('my-peer-id').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 22px;">${id}</span>`;
-    // Biz 'main-room' degan bitta umumiy guruh xonasiga ulanamiz
     socket.emit('join-room', 'main-room', id);
 });
 
-// Avtomatik o'zaro bog'lanish funksiyasi
+// Mikrofonni yoqish/o'chirish funksiyasi
+function toggleMute() {
+    const enabled = myStream.getAudioTracks()[0].enabled;
+    const btn = document.getElementById('mute-btn');
+    if (enabled) {
+        myStream.getAudioTracks()[0].enabled = false;
+        btn.innerText = "🎙️ Mikrofonni Yoqish";
+        btn.classList.add('unmuted');
+    } else {
+        myStream.getAudioTracks()[0].enabled = true;
+        btn.innerText = "🎙️ Mikrofonni O'chirish";
+        btn.classList.remove('unmuted');
+    }
+}
+
+// Kamerani yoqish/o'chirish funksiyasi
+function toggleCamera() {
+    const enabled = myStream.getVideoTracks()[0].enabled;
+    const btn = document.getElementById('camera-btn');
+    if (enabled) {
+        myStream.getVideoTracks()[0].enabled = false;
+        btn.innerText = "📹 Kamerani Yoqish";
+        btn.classList.add('unmuted');
+    } else {
+        myStream.getVideoTracks()[0].enabled = true;
+        btn.innerText = "📹 Kamerani O'chirish";
+        btn.classList.remove('unmuted');
+    }
+}
+
 function connectToUser(userId, stream) {
-    if (connectedPeers[userId]) return; // Agar allaqachon ulanish bo'lsa qayta ulamaymiz
+    if (connectedPeers[userId]) return;
 
     const call = peer.call(userId, stream);
     call.on('stream', userRemoteStream => {
@@ -64,7 +88,6 @@ function connectToUser(userId, stream) {
     connectedPeers[userId] = call;
 }
 
-// Qo'lda ulanish tugmasi uchun (agar kerak bo'lib qolsa)
 function connectToPeer() {
     const remotePeerId = document.getElementById('room-input').value.trim();
     if (!remotePeerId) return alert("Xona ID raqamini kiriting!");
@@ -73,7 +96,6 @@ function connectToPeer() {
     connectToUser(remotePeerId, myStream);
 }
 
-// Dinamik ravishda ekranga video qutisini qo'shish
 function addVideoStyle(stream, titleText, peerId) {
     if (document.getElementById(`div-${peerId}`)) return;
 
@@ -95,7 +117,6 @@ function addVideoStyle(stream, titleText, peerId) {
     videoGrid.appendChild(box);
 }
 
-// Kimdir chiqib ketsa, uning videosini o'chirish
 socket.on('user-disconnected', userId => {
     if (connectedPeers[userId]) connectedPeers[userId].close();
     removeVideo(userId);
@@ -106,7 +127,6 @@ function removeVideo(userId) {
     if (videoDiv) videoDiv.remove();
 }
 
-// Chat logikasi
 socket.on('createMessage', (message, userId) => {
     const chat = document.getElementById('chat');
     chat.innerHTML += `<div><b>ID (${userId.substring(0,4)}):</b> ${message}</div>`;
