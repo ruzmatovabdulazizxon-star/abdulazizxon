@@ -4,7 +4,6 @@ const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const { ExpressPeerServer } = require('peer');
 
-// PeerJS serverini Node.js ga ulash
 const peerServer = ExpressPeerServer(server, {
     debug: true
 });
@@ -17,6 +16,13 @@ app.get('/', (req, res) => {
 });
 
 io.on('connection', (socket) => {
+    
+    // Foydalanuvchi kiritganda unga tasodifiy 6 xonali ID generatsiya qilib beramiz
+    socket.on('get-short-id', () => {
+        const shortId = Math.floor(100000 + Math.random() * 900000).toString(); // Masalan: 584932
+        socket.emit('created-short-id', shortId);
+    });
+
     socket.on('join-room', (roomId, userId) => {
         socket.join(roomId);
         socket.to(roomId).emit('user-connected', userId);
