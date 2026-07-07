@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma (WebRTC)</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <title>Zoom Mini-Platforma (Barqaror Versiya)</title>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
     <style>
         body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; padding: 20px; text-align: center; }
         h1 { color: #8ab4f8; }
@@ -15,9 +17,9 @@
         video { width: 350px; height: 260px; background: black; border-radius: 8px; object-fit: cover; }
         .chat-box { background: #202124; padding: 20px; border-radius: 12px; width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         #chat { height: 200px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; margin-bottom: 10px; }
-        input { padding: 10px; border-radius: 6px; border: none; width: 70%; }
+        input { padding: 10px; border-radius: 6px; border: none; width: 70%; color: black; }
         button { padding: 10px 15px; border-radius: 6px; border: none; background: #1a73e8; color: white; cursor: pointer; font-weight: bold; }
-        #room-input { width: 60%; margin-bottom: 10px; text-align: center; }
+        #room-input { width: 60%; margin-bottom: 10px; text-align: center; color: black; }
         .info-panel { background: #202124; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: inline-block; }
     </style>
 </head>
