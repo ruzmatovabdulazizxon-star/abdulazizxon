@@ -22,12 +22,15 @@ app.get('/:room', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join-room', (roomId, userId) => {
         socket.join(roomId);
+        
+        // Xonadagi boshqa barcha foydalanuvchilarga yangi odam kelganini aytamiz
         socket.to(roomId).emit('user-connected', userId);
 
         socket.on('message', (message) => {
             io.to(roomId).emit('createMessage', message, userId);
         });
 
+        // Odam chiqib ketganda ekrandan videosini o'chirish uchun
         socket.on('disconnect', () => {
             socket.to(roomId).emit('user-disconnected', userId);
         });
