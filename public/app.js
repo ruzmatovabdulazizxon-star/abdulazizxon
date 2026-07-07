@@ -1,7 +1,7 @@
 const socket = io('/');
-const CURRENT_ROOM_ID = window.location.pathname.split('/')[1] || 'main-room';
+const videoGrid = document.getElementById('video-grid');
 
-// Tasodifiy 6 xonali Peer ID yaratish (671222 kabi)
+// O'zimizga tasodifiy 6 xonali ID yaratish
 const myCustomPeerId = Math.floor(100000 + Math.random() * 900000).toString();
 
 const peer = new Peer(myCustomPeerId, {
@@ -11,21 +11,22 @@ const peer = new Peer(myCustomPeerId, {
     secure: true
 });
 
-const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
 let myStream;
+const connectedPeers = {}; // Ulangan odamlarni eslab qolish uchun
 
+// Kamera va mikrofonni yoqish hamda o'z videomizni grid-ga qo'shish
 navigator.mediaDevices.getUserMedia({
     video: true,
     audio: true
 }).then(stream => {
     myStream = stream;
-    localVideo.srcObject = stream;
+    addVideoStyle(myStream, "Siz (Kamera)", myCustomPeerId);
 
+    // Boshqa birov bizga qo'ng'iroq qilib ID orqali ulansa, unga javob berish
     peer.on('call', call => {
         call.answer(stream);
         call.on('stream', userRemoteStream => {
-            remoteVideo.srcObject = userRemoteStream;
+            addVideoStyle(userRemoteStream, `Suhbatdosh (${call.peer})`, call.peer);
         });
     });
 }).catch(err => {
@@ -33,23 +34,54 @@ navigator.mediaDevices.getUserMedia({
 });
 
 peer.on('open', id => {
-    document.getElementById('my-peer-id').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 22px;">${id}</span><br><small style="color: #aaa;">(Shu qisqa raqamni sherigingizga bering)</small>`;
-    socket.emit('join-room', CURRENT_ROOM_ID, id);
+    document.getElementById('my-peer-id').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 22px;">${id}</span>`;
+    socket.emit('join-room', 'main-room', id);
 });
 
+// ID kiritib ulanish funksiyasi
 function connectToPeer() {
     const remotePeerId = document.getElementById('room-input').value.trim();
-    if (!remotePeerId) return alert("Iltimos, sherigingizning Xona ID raqamini kiriting!");
-    
+    if (!remotePeerId) return alert("Iltimos, Xona ID raqamini kiriting!");
+    if (remotePeerId === myCustomPeerId) return alert("O'zingizning ID raqamingizga ulanolmaysiz!");
+    if (connectedPeers[remotePeerId]) return alert("Bu foydalanuvchiga allaqachon ulangansiz!");
+
+    console.log("Qo'ng'iroq qilinmoqda: " + remotePeerId);
     const call = peer.call(remotePeerId, myStream);
+    
     call.on('stream', userRemoteStream => {
-        remoteVideo.srcObject = userRemoteStream;
+        addVideoStyle(userRemoteStream, `Suhbatdosh (${remotePeerId})`, remotePeerId);
     });
+
+    connectedPeers[remotePeerId] = call;
 }
 
+// Grid ichiga chiroyli qilib video va uning sarlavhasini dinamik qo'shish funksiyasi
+function addVideoStyle(stream, titleText, peerId) {
+    // Agar bu odamning videosi ekranda allaqachon bo'lsa, qayta yaratmaymiz
+    if (document.getElementById(`div-${peerId}`)) return;
+
+    const box = document.createElement('div');
+    box.id = `div-${peerId}`;
+    box.className = 'video-box';
+
+    const title = document.createElement('h4');
+    title.innerText = titleText;
+
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    if (peerId === myCustomPeerId) video.muted = true; // O'z ovozimiz o'zimizga qayta eshitilmasligi uchun
+
+    box.appendChild(title);
+    box.appendChild(video);
+    videoGrid.appendChild(box);
+}
+
+// Chat xabarlarini qabul qilish
 socket.on('createMessage', (message, userId) => {
     const chat = document.getElementById('chat');
-    chat.innerHTML += `<div><b>Suhbatdosh (${userId}):</b> ${message}</div>`;
+    chat.innerHTML += `<div><b>Foydalanuvchi (${userId.substring(0,4)}):</b> ${message}</div>`;
     chat.scrollTop = chat.scrollHeight;
 });
 
