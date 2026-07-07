@@ -10,7 +10,6 @@ app.use('/peerjs', peerServer);
 app.use(express.static('public'));
 
 app.get('/', (req, res) => {
-    // Bosh sahifaga kirganda avtomatik ravishda 6 xonali raqam generatsiya qilish
     const randomRoomId = Math.floor(100000 + Math.random() * 900000).toString();
     res.redirect(`/${randomRoomId}`);
 });
@@ -20,17 +19,18 @@ app.get('/:room', (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    socket.on('join-room', (roomId, userId) => {
+    // join-room endi username-ni ham qabul qiladi
+    socket.on('join-room', (roomId, userId, username) => {
         socket.join(roomId);
         
-        // Xonadagi boshqa barcha foydalanuvchilarga yangi odam kelganini aytamiz
-        socket.to(roomId).emit('user-connected', userId);
+        // Atrofdagilarga yangi foydalanuvchining ID va ismini e'lon qilamiz
+        socket.to(roomId).emit('user-connected', userId, username);
 
-        socket.on('message', (message) => {
-            io.to(roomId).emit('createMessage', message, userId);
+        // Chat xabari kelganda ismni ham qo'shib hamma tarqatamiz
+        socket.on('message', (message, userName) => {
+            socket.to(roomId).emit('createMessage', message, userId, userName);
         });
 
-        // Odam chiqib ketganda ekrandan videosini o'chirish uchun
         socket.on('disconnect', () => {
             socket.to(roomId).emit('user-disconnected', userId);
         });
