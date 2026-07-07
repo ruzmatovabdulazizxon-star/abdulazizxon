@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma (Ismlar bilan)</title>
+    <title>Zoom Mini-Platforma (Screen Share bilan)</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -35,9 +35,11 @@
         #room-input { width: 55%; margin-bottom: 10px; text-align: center; color: black; }
         .info-panel { background: #202124; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: inline-block; min-width: 400px; }
         
-        .controls-container { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
-        .control-btn { background: #3c4043; padding: 10px 15px; font-size: 13px; }
+        .controls-container { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .control-btn { background: #3c4043; padding: 10px 15px; font-size: 13px; color: white; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
+        .control-btn:hover { background: #4f5357; }
         .control-btn.unmuted { background: #ea4335; }
+        .control-btn.sharing { background: #34a853; } /* Ekran ulashilganda yashil rang */
     </style>
 </head>
 <body>
@@ -55,6 +57,7 @@
         <div class="controls-container">
             <button id="mute-btn" class="control-btn" onclick="toggleMute()">🎙️ Mikrofonni O'chirish</button>
             <button id="camera-btn" class="control-btn" onclick="toggleCamera()">📹 Kamerani O'chirish</button>
+            <button id="share-btn" class="control-btn" onclick="toggleScreenShare()">🖥️ Ekranni Ulashish</button>
         </div>
     </div>
 
