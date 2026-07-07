@@ -9,8 +9,8 @@ const peerServer = ExpressPeerServer(server, { debug: true });
 app.use('/peerjs', peerServer);
 app.use(express.static('public'));
 
-// Bosh sahifaga kirganda avtomatik ravishda 6 xonali tasodifiy raqam generatsiya qilib yo'naltirish
 app.get('/', (req, res) => {
+    // Bosh sahifaga kirganda avtomatik ravishda 6 xonali raqam generatsiya qilish
     const randomRoomId = Math.floor(100000 + Math.random() * 900000).toString();
     res.redirect(`/${randomRoomId}`);
 });
