@@ -1,7 +1,6 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-// Saytga kirganda foydalanuvchidan ismini so'raymiz
 let myName = prompt("Iltimos, ismingizni kiriting:") || "Mehmon_" + Math.floor(Math.random() * 1000);
 document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 
@@ -15,6 +14,7 @@ const peer = new Peer(myCustomPeerId, {
 });
 
 let myStream;
+let screenStream = null; // Ekran oqimi uchun o'zgaruvchi
 const connectedPeers = {}; 
 
 navigator.mediaDevices.getUserMedia({
@@ -22,25 +22,26 @@ navigator.mediaDevices.getUserMedia({
     audio: true
 }).then(stream => {
     myStream = stream;
-    // O'zimizning ismimiz bilan ekranga chiqaramiz
     addVideoStyle(myStream, `${myName} (Siz)`, myCustomPeerId);
 
-    // Kimdir bizga qo'ng'iroq qilsa
     peer.on('call', call => {
-        // Qo'ng'iroq qilgan odamning ismini uning yuborgan metadata ma'lumotidan olamiz
         const callerName = call.options.metadata ? call.options.metadata.username : `Suhbatdosh (${call.peer})`;
         
-        call.answer(stream);
+        // Agar hozir ekranni ulashayotgan bo'lsak, yangi ulanayotgan odamga kamerani emas, ekranni beramiz
+        const streamToSend = screenStream ? screenStream : myStream;
+        call.answer(streamToSend);
+        
         call.on('stream', userRemoteStream => {
             addVideoStyle(userRemoteStream, callerName, call.peer);
         });
     });
 
-    // SOKET: Yangi odam qo'shilsa uning ID va ismini qabul qilamiz
     socket.on('user-connected', (userId, remoteUserName) => {
         console.log(`${remoteUserName} xonaga qo'shildi.`);
         setTimeout(() => {
-            connectToUser(userId, stream, remoteUserName);
+            // Agar ekranni ulashayotgan bo'lsak, unga ham ekran oqimini yuboramiz
+            const streamToSend = screenStream ? screenStream : myStream;
+            connectToUser(userId, streamToSend, remoteUserName);
         }, 1000);
     });
 
@@ -50,7 +51,6 @@ navigator.mediaDevices.getUserMedia({
 
 peer.on('open', id => {
     document.getElementById('my-peer-id').innerHTML = `Sizning ID: <span style="color: #ccff00; font-size: 22px;">${id}</span>`;
-    // Soketga o'z ID va ismimizni yuboramiz
     socket.emit('join-room', 'main-room', id, myName);
 });
 
@@ -84,11 +84,68 @@ function toggleCamera() {
     }
 }
 
-// Boshqalarga ulanish funksiyasi (ismni ham birga jo'natadi)
+// 🖥️ EKYaN ULAShISh FUNKSIYASI
+function toggleScreenShare() {
+    const shareBtn = document.getElementById('share-btn');
+
+    // Agar ekran ulashish hali yoqilmagan bo'lsa (Yoqish bosilganda)
+    if (!screenStream) {
+        navigator.mediaDevices.getDisplayMedia({ video: true })
+            .then(stream => {
+                screenStream = stream;
+                const videoTrack = screenStream.getVideoTracks()[0];
+
+                // O'zimizning ekranimizdagi videoni o'zgartiramiz
+                const myVideoElement = document.getElementById(`div-${myCustomPeerId}`).querySelector('video');
+                myVideoElement.srcObject = screenStream;
+
+                // Xonadagi barcha suhbatdoshlarga video oqimni almashtirib yuboramiz (Replace Track)
+                Object.values(connectedPeers).forEach(call => {
+                    const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if (sender) sender.replaceTrack(videoTrack);
+                });
+
+                shareBtn.innerText = "🛑 Ulashishni To'xtatish";
+                shareBtn.classList.add('sharing');
+
+                // Agar foydalanuvchi brauzerning o'zidan "Dostup zakrit" (Stop sharing) tugmasini bossa
+                videoTrack.onended = () => {
+                    stopScreenShare();
+                };
+            }).catch(err => console.error("Ekran ulashishda xato:", err));
+    } else {
+        // Agar allaqachon ulashilayotgan bo'lsa (To'xtatish bosilganda)
+        stopScreenShare();
+    }
+}
+
+// Ekranni ulashishni to'xtatish va kameraga qaytish logikasi
+function stopScreenShare() {
+    const shareBtn = document.getElementById('share-btn');
+    if (!screenStream) return;
+
+    // Ekran oqimini to'xtatamiz
+    screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null;
+
+    // O'zimizning oynamizga kamerani qaytaramiz
+    const myVideoElement = document.getElementById(`div-${myCustomPeerId}`).querySelector('video');
+    myVideoElement.srcObject = myStream;
+
+    // Barcha suhbatdoshlarga kamera oqimini qaytarib yuboramiz
+    const cameraTrack = myStream.getVideoTracks()[0];
+    Object.values(connectedPeers).forEach(call => {
+        const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+        if (sender) sender.replaceTrack(cameraTrack);
+    });
+
+    shareBtn.innerText = "🖥️ Ekranni Ulashish";
+    shareBtn.classList.remove('sharing');
+}
+
 function connectToUser(userId, stream, remoteUserName) {
     if (connectedPeers[userId]) return;
 
-    // Qo'ng'iroq qilayotganda metadata ichida o'z ismimizni berib yuboramiz
     const call = peer.call(userId, stream, {
         metadata: { username: myName }
     });
@@ -109,13 +166,12 @@ function connectToPeer() {
     if (!remotePeerId) return alert("ID raqamini kiriting!");
     if (remotePeerId === myCustomPeerId) return alert("O'zingizga ulanolmaysiz!");
     
-    // Qo'lda ulanishda ism noma'lum bo'lsa ID yoziladi
-    connectToUser(remotePeerId, myStream, `Suhbatdosh (${remotePeerId})`);
+    const streamToSend = screenStream ? screenStream : myStream;
+    connectToUser(remotePeerId, streamToSend, `Suhbatdosh (${remotePeerId})`);
 }
 
 function addVideoStyle(stream, titleText, peerId) {
     if (document.getElementById(`div-${peerId}`)) {
-        // Agar ekran allaqachon bo'lsa, ismini yangilab qo'yamiz
         document.getElementById(`title-${peerId}`).innerText = titleText;
         return;
     }
@@ -149,7 +205,6 @@ function removeVideo(userId) {
     if (videoDiv) videoDiv.remove();
 }
 
-// Chat xabarlari (ism bilan)
 socket.on('createMessage', (message, userId, userName) => {
     const chat = document.getElementById('chat');
     chat.innerHTML += `<div><b style="color: #8ab4f8;">${userName}:</b> ${message}</div>`;
@@ -159,7 +214,6 @@ socket.on('createMessage', (message, userId, userName) => {
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
-        // Xabar uzatayotganda o'z ismimizni ham qo'shib yuboramiz
         socket.emit('message', input.value, myName);
         const chat = document.getElementById('chat');
         chat.innerHTML += `<div><b style="color: #ccff00;">Siz:</b> ${input.value}</div>`;
