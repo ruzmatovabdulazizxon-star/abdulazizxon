@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma (Barqaror Versiya)</title>
-    
+    <title>Zoom Mini-Platforma (WebRTC)</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
     <style>
         body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; padding: 20px; text-align: center; }
         h1 { color: #8ab4f8; }
@@ -24,17 +22,14 @@
     </style>
 </head>
 <body>
-
     <h1>Zoom Mini-Platforma (WebRTC)</h1>
-
     <div class="info-panel">
-        <div id="my-peer-id" style="font-weight: bold; font-size: 18px;">Xona ID yuklanmoqda...</div>
+        <div id="my-peer-id" style="font-weight: bold; font-size: 18px; color: #ccff00;">Sizning Xona ID: ...</div>
         <div style="margin-top: 10px;">
             <input type="text" id="room-input" placeholder="Sherigingizning Xona ID raqamini kiriting">
             <button onclick="connectToPeer()">Xonaga ulanish</button>
         </div>
     </div>
-
     <div class="main-container">
         <div class="video-box">
             <div class="video-container">
@@ -48,7 +43,6 @@
                 </div>
             </div>
         </div>
-
         <div class="chat-box">
             <h3>Jonli Chat</h3>
             <div id="chat"></div>
@@ -56,7 +50,6 @@
             <button onclick="sendMessage()">Yuborish</button>
         </div>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
