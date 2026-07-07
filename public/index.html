@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma (Guruhli Video)</title>
+    <title>Zoom Mini-Platforma (Mute/Unmute bilan)</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -11,7 +11,6 @@
         h1 { color: #8ab4f8; }
         .main-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
         
-        /* GURUXLI VIDEO SETKASI - necha kishi kirmasin, chiroyli qilib joylashtiradi */
         #video-grid { 
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
@@ -31,13 +30,28 @@
         #chat { height: 300px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; margin-bottom: 10px; }
         input { padding: 10px; border-radius: 6px; border: none; width: 70%; color: black; }
         button { padding: 10px 15px; border-radius: 6px; border: none; background: #1a73e8; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #1557b0; }
         #room-input { width: 60%; margin-bottom: 10px; text-align: center; color: black; }
         .info-panel { background: #202124; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: inline-block; }
+        
+        /* Yangi boshqaruv tugmalari dizayni */
+        .controls-container {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .control-btn {
+            background: #3c4043;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+        .control-btn.unmuted { background: #ea4335; } /* O'chganda qizil rang */
     </style>
 </head>
 <body>
 
-    <h1>Zoom Mini-Platforma (Guruhli WebRTC)</h1>
+    <h1>Zoom Mini-Platforma (Boshqaruv Paneli)</h1>
 
     <div class="info-panel">
         <div id="my-peer-id" style="font-weight: bold; font-size: 18px; color: #ccff00;">Sizning Xona ID: ...</div>
@@ -45,10 +59,14 @@
             <input type="text" id="room-input" placeholder="Suhbatdosh Xona ID raqamini kiriting">
             <button onclick="connectToPeer()">Ulanish</button>
         </div>
+        
+        <div class="controls-container">
+            <button id="mute-btn" class="control-btn" onclick="toggleMute()">🎙️ Mikrofonni O'chirish</button>
+            <button id="camera-btn" class="control-btn" onclick="toggleCamera()">📹 Kamerani O'chirish</button>
+        </div>
     </div>
 
     <div class="main-container">
-        <!-- Videolar dinamik ravishda shu yerga tushadi -->
         <div id="video-grid"></div>
 
         <div class="chat-box">
