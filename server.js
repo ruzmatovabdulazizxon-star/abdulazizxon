@@ -9,34 +9,37 @@ const peerServer = ExpressPeerServer(server, { debug: true });
 app.use('/peerjs', peerServer);
 app.use(express.static('public'));
 
-// 1. Bosh sahifaga kirganda avtomatik ravishda tasodifiy 6 xonali xona ochib, unga yo'naltirish
 app.get('/', (req, res) => {
-    const randomRoomId = Math.floor(100000 + Math.random() * 900000).toString();
-    res.redirect(`/${randomRoomId}`);
-});
-
-// 2. Dinamik xona manzili (Masalan: /352 yoki /680507)
-app.get('/:room', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
 
 io.on('connection', (socket) => {
-    // Foydalanuvchi xonaga qo'shilganda
-    socket.on('join-room', (roomId, userId, userName) => {
-        socket.join(roomId); // Aynan o'sha URL dagi xonaga ulanish
+    // 1. Foydalanuvchi o'z ID-si bilan tizimda ro'yxatdan o'tadi
+    socket.on('register-me', (myId, myName) => {
+        socket.join(myId); // Har kim o'z ID-si nomli virtual xonaga kiradi
+        socket.userId = myId;
+        socket.userName = myName;
+    });
 
-        // Ushbu xonadagi boshqa foydalanuvchilarga yangi odam kelganini bildirish
-        socket.to(roomId).emit('user-connected', userId, userName);
+    // 2. Mehmon xona egasiga kirish so'rovini yuboradi
+    socket.on('request-join', (targetRoomId, guestPeerId, guestName) => {
+        // So'rovni faqat o'sha xona egasiga yuborish
+        io.to(targetRoomId).emit('join-request-received', guestPeerId, guestName);
+    });
 
-        // Chat xabarlarini faqat shu xonaga yuborish
-        socket.on('message', (message) => {
-            io.to(roomId).emit('createMessage', message, userId, userName);
-        });
+    // 3. Xona egasining qarori (Ruxsat yoki Rad)
+    socket.on('join-response', (guestPeerId, targetRoomId, status, hostName) => {
+        if (status === 'accepted') {
+            // Mehmonga ruxsat berilganini aytamiz va ulanishni boshlaymiz
+            io.to(guestPeerId).emit('join-accepted', targetRoomId, hostName);
+        } else {
+            io.to(guestPeerId).emit('join-rejected');
+        }
+    });
 
-        // Chiqib ketganda faqat shu xonadagilarga xabar berish
-        socket.on('disconnect', () => {
-            socket.to(roomId).emit('user-disconnected', userId);
-        });
+    // Chat xabarlari (Faqat bir-biriga ulanganlar guruhiga yuboriladi)
+    socket.on('room-message', (roomId, message, userName) => {
+        io.to(roomId).emit('createMessage', message, userName);
     });
 });
 
