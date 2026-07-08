@@ -1,9 +1,14 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-let myName = prompt("Iltimos, ismingizni kiriting:") || "Mehmon_" + Math.floor(Math.random() * 1000);
+// URL dan Xona ID sini ajratib olish (Masalan: /352 -> 352)
+const ROOM_ID = window.location.pathname.split('/')[1];
+document.getElementById('room-display').innerText = `Xona Kodi: ${ROOM_ID}`;
+
+let myName = prompt("Ismingizni kiriting:") || "Mehmon_" + Math.floor(Math.random() * 1000);
 document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 
+// Har bir foydalanuvchi uchun unikal Peer ID
 const myCustomPeerId = Math.floor(100000 + Math.random() * 900000).toString();
 
 const peer = new Peer(myCustomPeerId, {
@@ -14,8 +19,8 @@ const peer = new Peer(myCustomPeerId, {
 });
 
 let myStream;
-let screenStream = null; 
-const connectedPeers = {}; 
+let screenStream = null;
+const connectedPeers = {};
 
 navigator.mediaDevices.getUserMedia({
     video: true,
@@ -24,137 +29,33 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, `${myName} (Siz)`, myCustomPeerId);
 
+    // Qo'ng'iroqlarga javob berish
     peer.on('call', call => {
-        const callerName = call.options.metadata ? call.options.metadata.username : `Suhbatdosh (${call.peer})`;
-        const streamToSend = screenStream ? screenStream : myStream;
-        call.answer(streamToSend);
+        const callerName = call.options.metadata ? call.options.metadata.username : "Suhbatdosh";
+        call.answer(screenStream ? screenStream : myStream);
         
         call.on('stream', userRemoteStream => {
             addVideoStyle(userRemoteStream, callerName, call.peer);
         });
+        connectedPeers[call.peer] = call;
     });
 
+    // Yangi foydalanuvchi ulanganda unga avtomatik qo'ng'iroq qilish
     socket.on('user-connected', (userId, remoteUserName) => {
-        console.log(`${remoteUserName} xonaga qo'shildi.`);
+        console.log(`${remoteUserName} ulandi.`);
         setTimeout(() => {
-            const streamToSend = screenStream ? screenStream : myStream;
-            connectToUser(userId, streamToSend, remoteUserName);
+            connectToUser(userId, screenStream ? screenStream : myStream, remoteUserName);
         }, 1000);
     });
 
 }).catch(err => {
-    console.error("Kamera ruxsatnomasi xatosi:", err);
+    alert("Kamera yoki mikrofonga ruxsat berilmadi!");
 });
 
+// Peer ulangach, soket orqali aynan shu XONAGA qo'shilish
 peer.on('open', id => {
-    document.getElementById('my-peer-id').innerHTML = `Sizning ID: <span style="color: #ccff00; font-size: 22px;">${id}</span>`;
-    socket.emit('join-room', 'main-room', id, myName);
+    socket.emit('join-room', ROOM_ID, id, myName);
 });
-
-function toggleMute() {
-    const enabled = myStream.getAudioTracks()[0].enabled;
-    const btn = document.getElementById('mute-btn');
-    if (enabled) {
-        myStream.getAudioTracks()[0].enabled = false;
-        btn.innerText = "🎙️ Mikrofon: OFF";
-        btn.classList.add('unmuted');
-    } else {
-        myStream.getAudioTracks()[0].enabled = true;
-        btn.innerText = "🎙️ Mikrofon: ON";
-        btn.classList.remove('unmuted');
-    }
-}
-
-function toggleCamera() {
-    const enabled = myStream.getVideoTracks()[0].enabled;
-    const btn = document.getElementById('camera-btn');
-    if (enabled) {
-        myStream.getVideoTracks()[0].enabled = false;
-        btn.innerText = "📹 Kamera: OFF";
-        btn.classList.add('unmuted');
-    } else {
-        myStream.getVideoTracks()[0].enabled = true;
-        btn.innerText = "📹 Kamera: ON";
-        btn.classList.remove('unmuted');
-    }
-}
-
-function toggleScreenShare() {
-    const shareBtn = document.getElementById('share-btn');
-
-    if (!screenStream) {
-        navigator.mediaDevices.getDisplayMedia({ video: true })
-            .then(stream => {
-                screenStream = stream;
-                const videoTrack = screenStream.getVideoTracks()[0];
-
-                const myVideoElement = document.getElementById(`div-${myCustomPeerId}`).querySelector('video');
-                myVideoElement.srcObject = screenStream;
-
-                Object.values(connectedPeers).forEach(call => {
-                    const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(videoTrack);
-                });
-
-                shareBtn.innerText = "🛑 Ekran: To'xtatish";
-                shareBtn.classList.add('sharing');
-
-                videoTrack.onended = () => { stopScreenShare(); };
-            }).catch(err => console.error("Ekran ulashishda xato:", err));
-    } else {
-        stopScreenShare();
-    }
-}
-
-function stopScreenShare() {
-    const shareBtn = document.getElementById('share-btn');
-    if (!screenStream) return;
-
-    screenStream.getTracks().forEach(track => track.stop());
-    screenStream = null;
-
-    const myVideoElement = document.getElementById(`div-${myCustomPeerId}`).querySelector('video');
-    myVideoElement.srcObject = myStream;
-
-    const cameraTrack = myStream.getVideoTracks()[0];
-    Object.values(connectedPeers).forEach(call => {
-        const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-        if (sender) sender.replaceTrack(cameraTrack);
-    });
-
-    shareBtn.innerText = "🖥️ Ekran";
-    shareBtn.remove('sharing');
-}
-
-// 👋 XONADAN ChIQISh FUNKSIYASI
-function leaveRoom() {
-    const confirmLeave = confirm("Xonani tark etishni xohlaysizmi?");
-    if (!confirmLeave) return;
-
-    // 1. Ekran yoki kamera oqimlarini butunlay o'chirish (Kamera chirog'ini o'chirish)
-    if (myStream) {
-        myStream.getTracks().forEach(track => track.stop());
-    }
-    if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop());
-    }
-
-    // 2. PeerJS va barcha faol qo'ng'iroqlarni yopish
-    Object.values(connectedPeers).forEach(call => call.close());
-    peer.destroy();
-
-    // 3. Soket aloqasini uzish
-    socket.disconnect();
-
-    // 4. Foydalanuvchini platformadan chiqib ketganligi haqida xabar oynasiga yo'naltirish
-    document.body.innerHTML = `
-        <div style="margin-top: 100px; text-align: center;">
-            <h1 style="color: #8ab4f8;">Konferensiya yakunlandi</h1>
-            <p style="color: #aaa; font-size: 18px;">Siz xonadan chiroyli tarzda chiqdingiz.</p>
-            <button onclick="window.location.reload()" style="padding: 12px 25px; font-size: 16px; margin-top: 20px;">Qayta kirish</button>
-        </div>
-    `;
-}
 
 function connectToUser(userId, stream, remoteUserName) {
     if (connectedPeers[userId]) return;
@@ -164,7 +65,7 @@ function connectToUser(userId, stream, remoteUserName) {
     });
 
     call.on('stream', userRemoteStream => {
-        addVideoStyle(userRemoteStream, remoteUserName || `Suhbatdosh (${userId})`, userId);
+        addVideoStyle(userRemoteStream, remoteUserName, userId);
     });
 
     call.on('close', () => {
@@ -174,27 +75,82 @@ function connectToUser(userId, stream, remoteUserName) {
     connectedPeers[userId] = call;
 }
 
-function connectToPeer() {
-    const remotePeerId = document.getElementById('room-input').value.trim();
-    if (!remotePeerId) return alert("ID raqamini kiriting!");
-    if (remotePeerId === myCustomPeerId) return alert("O'zingizga ulanolmaysiz!");
-    
-    const streamToSend = screenStream ? screenStream : myStream;
-    connectToUser(remotePeerId, streamToSend, `Suhbatdosh (${remotePeerId})`);
+// Mikrofon boshqaruvi
+function toggleMute() {
+    const enabled = myStream.getAudioTracks()[0].enabled;
+    const btn = document.getElementById('mute-btn');
+    myStream.getAudioTracks()[0].enabled = !enabled;
+    btn.innerText = !enabled ? "🎙️ Mikrofon: ON" : "🎙️ Mikrofon: OFF";
+    btn.classList.toggle('off', enabled);
+}
+
+// Kamera boshqaruvi
+function toggleCamera() {
+    const enabled = myStream.getVideoTracks()[0].enabled;
+    const btn = document.getElementById('camera-btn');
+    myStream.getVideoTracks()[0].enabled = !enabled;
+    btn.innerText = !enabled ? "📹 Kamera: ON" : "📹 Kamera: OFF";
+    btn.classList.toggle('off', enabled);
+}
+
+// Ekran ulashish
+function toggleScreenShare() {
+    const shareBtn = document.getElementById('share-btn');
+    if (!screenStream) {
+        navigator.mediaDevices.getDisplayMedia({ video: true })
+            .then(stream => {
+                screenStream = stream;
+                const videoTrack = screenStream.getVideoTracks()[0];
+                document.getElementById(`div-${myCustomPeerId}`).querySelector('video').srcObject = screenStream;
+
+                Object.values(connectedPeers).forEach(call => {
+                    const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if (sender) sender.replaceTrack(videoTrack);
+                });
+                shareBtn.innerText = "🛑 Ekran: OFF";
+                shareBtn.classList.add('off');
+                videoTrack.onended = () => { stopScreenShare(); };
+            }).catch(err => console.log(err));
+    } else {
+        stopScreenShare();
+    }
+}
+
+function stopScreenShare() {
+    const shareBtn = document.getElementById('share-btn');
+    if (!screenStream) return;
+    screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null;
+
+    document.getElementById(`div-${myCustomPeerId}`).querySelector('video').srcObject = myStream;
+    const cameraTrack = myStream.getVideoTracks()[0];
+    Object.values(connectedPeers).forEach(call => {
+        const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+        if (sender) sender.replaceTrack(cameraTrack);
+    });
+    shareBtn.innerText = "🖥️ Ekran ulashish";
+    shareBtn.classList.remove('off');
+}
+
+// Xonadan chiqish
+function leaveRoom() {
+    if (confirm("Xonadan chiqmoqchimisiz?")) {
+        if (myStream) myStream.getTracks().forEach(track => track.stop());
+        if (screenStream) screenStream.getTracks().forEach(track => track.stop());
+        peer.destroy();
+        socket.disconnect();
+        document.body.innerHTML = `<h1 style='margin-top:100px;'>Xonadan chiqdingiz.</h1><button onclick='window.location.href="/"'>Yangi xona ochish</button>`;
+    }
 }
 
 function addVideoStyle(stream, titleText, peerId) {
-    if (document.getElementById(`div-${peerId}`)) {
-        document.getElementById(`title-${peerId}`).innerText = titleText;
-        return;
-    }
+    if (document.getElementById(`div-${peerId}`)) return;
 
     const box = document.createElement('div');
     box.id = `div-${peerId}`;
     box.className = 'video-box';
 
     const title = document.createElement('h4');
-    title.id = `title-${peerId}`;
     title.innerText = titleText;
 
     const video = document.createElement('video');
@@ -220,17 +176,15 @@ function removeVideo(userId) {
 
 socket.on('createMessage', (message, userId, userName) => {
     const chat = document.getElementById('chat');
-    chat.innerHTML += `<div><b style="color: #8ab4f8;">${userName}:</b> ${message}</div>`;
+    const isMe = userId === myCustomPeerId;
+    chat.innerHTML += `<div><b style="color: ${isMe ? '#ccff00' : '#8ab4f8'}">${userName}:</b> ${message}</div>`;
     chat.scrollTop = chat.scrollHeight;
 });
 
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
-        socket.emit('message', input.value, myName);
-        const chat = document.getElementById('chat');
-        chat.innerHTML += `<div><b style="color: #ccff00;">Siz:</b> ${input.value}</div>`;
-        chat.scrollTop = chat.scrollHeight;
+        socket.emit('message', input.value);
         input.value = "";
     }
 }
