@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Mini-Platforma Pro</title>
+    <title>Zoom Professional Platforma</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background: #141414; color: white; margin: 0; padding: 20px; text-align: center; }
-        h1 { color: #8ab4f8; margin-bottom: 5px; font-size: 24px; }
+        h1 { color: #8ab4f8; margin-bottom: 5px; }
         #welcome-user { color: #aaa; font-size: 15px; margin-bottom: 15px; }
         
         .main-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
@@ -22,44 +22,79 @@
             background: #202124;
             padding: 20px;
             border-radius: 12px;
-            min-height: 400px;
+            min-height: 350px;
         }
         .video-box { position: relative; background: #1a1a1a; padding: 8px; border-radius: 10px; border: 1px solid #3c4043; }
         .video-box h4 { margin: 5px 0; font-size: 14px; color: #ccff00; }
         video { width: 100%; height: 200px; background: black; border-radius: 8px; object-fit: cover; }
         
         .chat-box { background: #202124; padding: 20px; border-radius: 12px; width: 300px; }
-        #chat { height: 340px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; font-size: 14px; }
+        #chat { height: 300px; overflow-y: auto; border: 1px solid #3c4043; background: #1a1a1a; padding: 10px; border-radius: 6px; text-align: left; font-size: 14px; }
         #chat div { margin-bottom: 8px; }
         
         .control-panel { background: #202124; padding: 15px; border-radius: 12px; display: inline-block; min-width: 450px; margin-bottom: 15px; }
         .room-title { font-size: 18px; color: #ccff00; font-weight: bold; margin-bottom: 12px; }
         
-        .btn-group { display: flex; justify-content: center; gap: 10px; }
+        .btn-group { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
         button { padding: 10px 15px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
         .action-btn { background: #3c4043; color: white; }
         .action-btn:hover { background: #4f5357; }
         .action-btn.off { background: #ea4335; }
         .leave-btn { background: #ea4335; color: white; }
-        .leave-btn:hover { background: #c53026; }
         
-        .chat-input-group { display: flex; gap: 5px; margin-top: 10px; }
-        .chat-input-group input { flex: 1; padding: 10px; border-radius: 6px; border: none; }
-        .chat-input-group button { background: #1a73e8; color: white; }
+        .connect-box { margin-bottom: 15px; }
+        input { padding: 10px; border-radius: 6px; border: none; color: black; text-align: center; }
+        .connect-box button { background: #1a73e8; color: white; }
+
+        /* Zoom uslubidagi Ruxsat berish oynasi (Modal) */
+        #lobby-modal { 
+            display: none; position: fixed; top: 20px; right: 20px; 
+            background: #2d2e30; border: 2px solid #1a73e8; padding: 20px; 
+            border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); z-index: 9999; text-align: left;
+        }
+        .modal-btns { display: flex; gap: 10px; margin-top: 15px; }
+        .admit-btn { background: #34a853; color: white; }
+        .reject-btn { background: #ea4335; color: white; }
+
+        /* Kutish xonasi ekrani */
+        #waiting-screen {
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(20,20,20,0.95); z-index: 8888; justify-content: center; align-items: center; flex-direction: column;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Zoom Mini-Platforma</h1>
+    <h1>Zoom Professional Platforma</h1>
     <div id="welcome-user">Yuklanmoqda...</div>
 
+    <div id="waiting-screen">
+        <h2 style="color: #8ab4f8;">Kutish xonasi (Waiting Room)</h2>
+        <p id="waiting-text" style="font-size: 18px; color: #aaa;">Xona egasi sizga ruxsat berishini kuting...</p>
+        <button onclick="window.location.reload()" style="background:#3c4043; color:white;">Bekor qilish</button>
+    </div>
+
+    <div id="lobby-modal">
+        <h4 style="margin:0; color:#ccff00;">🔔 Kirish so'rovi!</h4>
+        <p id="lobby-msg" style="margin: 10px 0 0 0; font-size:14px;"></p>
+        <div class="modal-btns">
+            <button class="admit-btn" id="btn-admit">Ruxsat berish (Admit)</button>
+            <button class="reject-btn" id="btn-reject">Taqiqlash (Reject)</button>
+        </div>
+    </div>
+
     <div class="control-panel">
-        <div class="room-title" id="room-display">Xona: Yuklanmoqda...</div>
+        <div class="room-title" id="room-display">Sizning Xona ID: Yuklanmoqda...</div>
         
+        <div class="connect-box">
+            <input type="text" id="target-room-input" placeholder="Xona ID raqamini kiriting">
+            <button onclick="askToJoin()">Xonaga ulanish</button>
+        </div>
+
         <div class="btn-group">
             <button id="mute-btn" class="action-btn" onclick="toggleMute()">🎙️ Mikrofon</button>
             <button id="camera-btn" class="action-btn" onclick="toggleCamera()">📹 Kamera</button>
-            <button id="share-btn" class="action-btn" onclick="toggleScreenShare()">🖥️ Ekran ulashish</button>
+            <button id="share-btn" class="action-btn" onclick="toggleScreenShare()">🖥️ Ekran</button>
             <button class="leave-btn" onclick="leaveRoom()">👋 Chiqish</button>
         </div>
     </div>
@@ -70,9 +105,9 @@
         <div class="chat-box">
             <h3>Jonli Chat</h3>
             <div id="chat"></div>
-            <div class="chat-input-group">
-                <input type="text" id="messageInput" placeholder="Xabar yozing..." onkeypress="if(event.key === 'Enter') sendMessage()">
-                <button onclick="sendMessage()">>></button>
+            <div style="display:flex; gap:5px; margin-top:10px;">
+                <input type="text" id="messageInput" placeholder="Xabar..." style="flex:1;" onkeypress="if(event.key === 'Enter') sendMessage()">
+                <button onclick="sendMessage()" style="background:#1a73e8; color:white;">>></button>
             </div>
         </div>
     </div>
