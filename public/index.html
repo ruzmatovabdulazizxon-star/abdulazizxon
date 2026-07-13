@@ -35,12 +35,13 @@
         .control-panel { background: #202124; padding: 15px; border-radius: 12px; display: inline-block; min-width: 450px; margin-bottom: 15px; }
         .room-title { font-size: 18px; color: #ccff00; font-weight: bold; margin-bottom: 12px; }
         
-        .btn-group { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
+        .btn-group { display: flex; justify-content: center; gap: 10px; margin-top: 15px; }
         button { padding: 10px 15px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
         .action-btn { background: #3c4043; color: white; }
         .action-btn:hover { background: #4f5357; }
-        .action-btn.off { background: #ea4335; }
+        .action-btn.off { background: #ea4335 !important; }
         .leave-btn { background: #ea4335; color: white; }
+        .leave-btn:hover { background: #c53026; }
         
         .connect-box { margin-bottom: 15px; }
         input { padding: 10px; border-radius: 6px; border: none; color: black; text-align: center; }
@@ -92,8 +93,8 @@
         </div>
 
         <div class="btn-group">
-            <button id="mute-btn" class="action-btn" onclick="toggleMute()">🎙️ Mikrofon</button>
-            <button id="camera-btn" class="action-btn" onclick="toggleCamera()">📹 Kamera</button>
+            <button id="mute-btn" class="action-btn" onclick="toggleMute()">🎙️ Mikrofon: ON</button>
+            <button id="camera-btn" class="action-btn" onclick="toggleCamera()">📹 Kamera: ON</button>
             <button id="share-btn" class="action-btn" onclick="toggleScreenShare()">🖥️ Ekran</button>
             <button class="leave-btn" onclick="leaveRoom()">👋 Chiqish</button>
         </div>
