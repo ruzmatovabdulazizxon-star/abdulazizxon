@@ -26,11 +26,10 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
 
+    // Kiruvchi qo'ng'iroqlarni qabul qilish (Xona egasi yoki xonadagi boshqa mehmonlardan)
     peer.on('call', call => {
-        // Agar ekran ulashilgan bo'lsa ekran oqimini, yo'qsa kamera oqimini yuboramiz
         call.answer(screenStream ? screenStream : myStream);
         
-        // Narigi tomondan oqim kelsa uni ekranga chiqaramiz
         call.on('stream', userRemoteStream => {
             const callerName = call.options.metadata ? call.options.metadata.username : "Suhbatdosh";
             addVideoStyle(userRemoteStream, callerName, call.peer);
@@ -44,7 +43,7 @@ peer.on('open', id => {
     socket.emit('register-me', id, myName);
 });
 
-// 1. MEHMON: Xonaga ulanish so'rovi
+// 1. MEHMON: Xona ID raqamiga ulanish so'rovi
 function askToJoin() {
     const targetId = document.getElementById('target-room-input').value.trim();
     if (!targetId) return alert("ID kiriting!");
@@ -56,7 +55,7 @@ function askToJoin() {
     socket.emit('request-join', targetId, myZoomId, myName);
 }
 
-// 2. XONA EGASI: So'rov kelganda modalni ko'rsatish
+// 2. FAQAT XONA EGASI: So'rov oynasi faqat sizda chiqadi
 socket.on('join-request-received', (guestPeerId, guestName) => {
     const modal = document.getElementById('lobby-modal');
     document.getElementById('lobby-msg').innerText = `"${guestName}" xonangizga kirishga ruxsat so'rayapti.`;
@@ -65,7 +64,6 @@ socket.on('join-request-received', (guestPeerId, guestName) => {
     document.getElementById('btn-admit').onclick = () => {
         socket.emit('join-response', guestPeerId, myZoomId, 'accepted', myName);
         modal.style.display = 'none';
-        socket.emit('register-me', myZoomId, myName); 
     };
 
     document.getElementById('btn-reject').onclick = () => {
@@ -74,31 +72,44 @@ socket.on('join-request-received', (guestPeerId, guestName) => {
     };
 });
 
-// 3. MEHMON: Ruxsat berilganda ulanish
+// 3. MEHMON: Ruxsat berilganda xonaga to'liq kirish
 socket.on('join-accepted', (targetRoomId, hostName) => {
     document.getElementById('waiting-screen').style.display = 'none';
     currentActiveRoomId = targetRoomId; 
     
-    socket.emit('register-me', targetRoomId, myName);
+    // Serverdagi xona oqimiga ulanamiz
+    socket.emit('join-room-flow', targetRoomId, myZoomId);
 
-    const call = peer.call(targetRoomId, screenStream ? screenStream : myStream, {
+    // Xona egasiga qo'ng'iroq qilamiz
+    connectToNewUser(targetRoomId, hostName);
+});
+
+// 4. XONADAGI BOSHQALAR: Yangi foydalanuvchi qo'shilganda u bilan avtomatik Peer ulanish o'rnatish
+socket.on('user-joined-room', (newUserId) => {
+    // Yangi kelgan mehmonga o'z oqimimizni srazu uzatamiz
+    connectToNewUser(newUserId, "Suhbatdosh");
+});
+
+// PeerJS orqali istalgan foydalanuvchiga ulanish funksiyasi
+function connectToNewUser(userId, userName) {
+    const call = peer.call(userId, screenStream ? screenStream : myStream, {
         metadata: { username: myName }
     });
 
     call.on('stream', userRemoteStream => {
-        addVideoStyle(userRemoteStream, hostName, targetRoomId);
+        addVideoStyle(userRemoteStream, userName, userId);
     });
 
-    call.on('close', () => { removeVideo(targetRoomId); });
-    connectedPeers[targetRoomId] = call;
-});
+    call.on('close', () => { removeVideo(userId); });
+    connectedPeers[userId] = call;
+}
 
 socket.on('join-rejected', () => {
     document.getElementById('waiting-screen').style.display = 'none';
     alert("Xona egasi sizga kirishga ruxsat bermadi!");
 });
 
-// MIKROFONNI O'CHIRISH FUNKSIYASI
+// MIKROFONNI O'CHIRISH
 function toggleMute() {
     const audioTrack = myStream.getAudioTracks()[0];
     if (!audioTrack) return alert("Mikrofon topilmadi!");
@@ -123,7 +134,7 @@ function toggleMute() {
     }
 }
 
-// KAMERANI O'CHIRISH FUNKSIYASI
+// KAMERANI O'CHIRISH
 function toggleCamera() {
     const videoTrack = myStream.getVideoTracks()[0];
     if (!videoTrack) return alert("Kamera topilmadi!");
@@ -148,7 +159,7 @@ function toggleCamera() {
     }
 }
 
-// 🖥️ AKTIIV VA SINXRON EKRAN ULASHISH FUNKSIYASI (F5-SIZ ISHLAYDI)
+// SINXRON EKRAN ULASHISH
 function toggleScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     
@@ -158,11 +169,9 @@ function toggleScreenShare() {
                 screenStream = stream;
                 const videoTrack = screenStream.getVideoTracks()[0];
 
-                // 1. O'zimizning ekrandagi videoni kamera oqimidan ekran oqimiga almashtiramiz
                 const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
                 myVideoElement.srcObject = screenStream;
 
-                // 2. Hozir ulangan barcha foydalanuvchilarga yangi ekran trekini srazu yuboramiz
                 Object.values(connectedPeers).forEach(call => {
                     if (call.peerConnection) {
                         const senders = call.peerConnection.getSenders();
@@ -176,7 +185,6 @@ function toggleScreenShare() {
                 shareBtn.innerText = "🛑 Ekran: OFF";
                 shareBtn.classList.add('off');
 
-                // Agar foydalanuvchi "Ekran ulashishni to'xtatish" brauzer tugmasini bossa
                 videoTrack.onended = () => { stopScreenShare(); };
             })
             .catch(err => console.log("Ekran ulashishda xatolik: ", err));
@@ -185,7 +193,6 @@ function toggleScreenShare() {
     }
 }
 
-// EKRAN ULASHISHNI TO'XTATISH VA KAMERAGA QAYTISH
 function stopScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     if (!screenStream) return;
@@ -193,11 +200,9 @@ function stopScreenShare() {
     screenStream.getTracks().forEach(track => track.stop());
     screenStream = null;
 
-    // 1. O'zimizning videoni kameraga qaytaramiz
     const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
     myVideoElement.srcObject = myStream;
 
-    // 2. Kamera trekini qaytadan barcha suhbatdoshlarga srazu uzatamiz
     const cameraTrack = myStream.getVideoTracks()[0];
     Object.values(connectedPeers).forEach(call => {
         if (call.peerConnection) {
@@ -213,14 +218,12 @@ function stopScreenShare() {
     shareBtn.classList.remove('off');
 }
 
-// XONADAN CHIQISH
 function leaveRoom() {
     if (confirm("Xonadan chiqmoqchimisiz?")) {
         window.location.reload();
     }
 }
 
-// CHAT TIZIMI
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
