@@ -122,10 +122,39 @@ socket.on('createMessage', (message, userName) => {
 
 // Mikrofon / Kamera / Ekran boshqaruvlari
 function toggleMute() {
-    const enabled = myStream.getAudioTracks()[0].enabled;
-    myStream.getAudioTracks()[0].enabled = !enabled;
-    document.getElementById('mute-btn').innerText = !enabled ? "🎙️ Mikrofon: ON" : "🎙️ Mikrofon: OFF";
-    document.getElementById('mute-btn').classList.toggle('off', enabled);
+    // 1. O'zimizning asosiy oqimimizdagi audio trekni topamiz
+    const audioTrack = myStream.getAudioTracks()[0];
+    if (!audioTrack) return alert("Mikrofon aniqlanmadi!");
+
+    const enabled = audioTrack.enabled;
+    const btn = document.getElementById('mute-btn');
+
+    // 2. Mikrofon holatini teskarisiga o'zgartiramiz
+    audioTrack.enabled = !enabled;
+
+    // 3. FAOL ULANIShLAR: Boshqa suhbatdoshlarga ketayotgan audio oqimni ham to'xtatamiz/yoqamiz
+    Object.values(connectedPeers).forEach(call => {
+        if (call.peerConnection) {
+            // PeerJS ulanishi ichidan faqat audio yuboruvchi trekni qidiramiz
+            const audioSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+            if (audioSender) {
+                audioSender.track.enabled = !enabled;
+            }
+        }
+    });
+
+    // 4. Tugma dizayni va matnini yangilaymiz
+    if (enabled) {
+        // Hozir o'chdi (Muted)
+        btn.innerText = "🎙️ Mikrofon: OFF";
+        btn.style.background = "#ea4335"; // Qizil rang
+        btn.classList.add('off');
+    } else {
+        // Hozir yondi (Unmuted)
+        btn.innerText = "🎙️ Mikrofon: ON";
+        btn.style.background = "#3c4043"; // Standart to'q rang
+        btn.classList.remove('off');
+    }
 }
 
 function toggleCamera() {
