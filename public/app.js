@@ -155,13 +155,34 @@ function toggleMute() {
         btn.style.background = "#3c4043"; // Standart to'q rang
         btn.classList.remove('off');
     }
-}
-
 function toggleCamera() {
-    const enabled = myStream.getVideoTracks()[0].enabled;
-    myStream.getVideoTracks()[0].enabled = !enabled;
-    document.getElementById('camera-btn').innerText = !enabled ? "📹 Kamera: ON" : "📹 Kamera: OFF";
-    document.getElementById('camera-btn').classList.toggle('off', enabled);
+    const videoTrack = myStream.getVideoTracks()[0];
+    if (!videoTrack) return alert("Kamera aniqlanmadi!");
+
+    const enabled = videoTrack.enabled;
+    const btn = document.getElementById('camera-btn');
+
+    videoTrack.enabled = !enabled;
+
+    // Boshqa suhbatdoshlarga ketayotgan videoni ham trek darajasida boshqarish
+    Object.values(connectedPeers).forEach(call => {
+        if (call.peerConnection) {
+            const videoSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+                videoSender.track.enabled = !enabled;
+            }
+        }
+    });
+
+    if (enabled) {
+        btn.innerText = "📹 Kamera: OFF";
+        btn.style.background = "#ea4335";
+        btn.classList.add('off');
+    } else {
+        btn.innerText = "📹 Kamera: ON";
+        btn.style.background = "#3c4043";
+        btn.classList.remove('off');
+    }
 }
 
 function toggleScreenShare() {
