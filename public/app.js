@@ -27,11 +27,15 @@ navigator.mediaDevices.getUserMedia({
     addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
 
     peer.on('call', call => {
+        // Agar ekran ulashilgan bo'lsa ekran oqimini, yo'qsa kamera oqimini yuboramiz
         call.answer(screenStream ? screenStream : myStream);
+        
+        // Narigi tomondan oqim kelsa uni ekranga chiqaramiz
         call.on('stream', userRemoteStream => {
             const callerName = call.options.metadata ? call.options.metadata.username : "Suhbatdosh";
             addVideoStyle(userRemoteStream, callerName, call.peer);
         });
+        
         connectedPeers[call.peer] = call;
     });
 });
@@ -94,7 +98,7 @@ socket.on('join-rejected', () => {
     alert("Xona egasi sizga kirishga ruxsat bermadi!");
 });
 
-// 🛠️ MIKROFONNI DOIMIY VA TO'LIQ O'CHIRISH FUNKSIYASI (HAR IKKI TOMONDA)
+// MIKROFONNI O'CHIRISH FUNKSIYASI
 function toggleMute() {
     const audioTrack = myStream.getAudioTracks()[0];
     if (!audioTrack) return alert("Mikrofon topilmadi!");
@@ -102,7 +106,6 @@ function toggleMute() {
     const enabled = audioTrack.enabled;
     audioTrack.enabled = !enabled;
 
-    // Boshqalarga ketayotgan audio oqimlarni ham trek darajasida to'xtatamiz
     Object.values(connectedPeers).forEach(call => {
         if (call.peerConnection) {
             const audioSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
@@ -120,7 +123,7 @@ function toggleMute() {
     }
 }
 
-// 📹 KAMERANI TO'LIQ O'CHIRISH FUNKSIYASI
+// KAMERANI O'CHIRISH FUNKSIYASI
 function toggleCamera() {
     const videoTrack = myStream.getVideoTracks()[0];
     if (!videoTrack) return alert("Kamera topilmadi!");
@@ -128,7 +131,6 @@ function toggleCamera() {
     const enabled = videoTrack.enabled;
     videoTrack.enabled = !enabled;
 
-    // Boshqalarga ketayotgan video oqimlarni ham trek darajasida to'xtatamiz
     Object.values(connectedPeers).forEach(call => {
         if (call.peerConnection) {
             const videoSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -146,52 +148,79 @@ function toggleCamera() {
     }
 }
 
-// EKRAN ULASHISH TIZIMI
+// 🖥️ AKTIIV VA SINXRON EKRAN ULASHISH FUNKSIYASI (F5-SIZ ISHLAYDI)
 function toggleScreenShare() {
     const shareBtn = document.getElementById('share-btn');
+    
     if (!screenStream) {
         navigator.mediaDevices.getDisplayMedia({ video: true })
             .then(stream => {
                 screenStream = stream;
                 const videoTrack = screenStream.getVideoTracks()[0];
-                document.getElementById(`div-${myZoomId}`).querySelector('video').srcObject = screenStream;
 
+                // 1. O'zimizning ekrandagi videoni kamera oqimidan ekran oqimiga almashtiramiz
+                const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
+                myVideoElement.srcObject = screenStream;
+
+                // 2. Hozir ulangan barcha foydalanuvchilarga yangi ekran trekini srazu yuboramiz
                 Object.values(connectedPeers).forEach(call => {
-                    const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(videoTrack);
+                    if (call.peerConnection) {
+                        const senders = call.peerConnection.getSenders();
+                        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                        if (videoSender) {
+                            videoSender.replaceTrack(videoTrack);
+                        }
+                    }
                 });
+
                 shareBtn.innerText = "🛑 Ekran: OFF";
                 shareBtn.classList.add('off');
+
+                // Agar foydalanuvchi "Ekran ulashishni to'xtatish" brauzer tugmasini bossa
                 videoTrack.onended = () => { stopScreenShare(); };
-            }).catch(err => console.log(err));
+            })
+            .catch(err => console.log("Ekran ulashishda xatolik: ", err));
     } else {
         stopScreenShare();
     }
 }
 
+// EKRAN ULASHISHNI TO'XTATISH VA KAMERAGA QAYTISH
 function stopScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     if (!screenStream) return;
+
     screenStream.getTracks().forEach(track => track.stop());
     screenStream = null;
 
-    document.getElementById(`div-${myZoomId}`).querySelector('video').srcObject = myStream;
+    // 1. O'zimizning videoni kameraga qaytaramiz
+    const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
+    myVideoElement.srcObject = myStream;
+
+    // 2. Kamera trekini qaytadan barcha suhbatdoshlarga srazu uzatamiz
     const cameraTrack = myStream.getVideoTracks()[0];
     Object.values(connectedPeers).forEach(call => {
-        const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-        if (sender) sender.replaceTrack(cameraTrack);
+        if (call.peerConnection) {
+            const senders = call.peerConnection.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+                videoSender.replaceTrack(cameraTrack);
+            }
+        }
     });
+
     shareBtn.innerText = "🖥️ Ekran";
     shareBtn.classList.remove('off');
 }
 
-// XONADAN CHIQIISh
+// XONADAN CHIQISH
 function leaveRoom() {
     if (confirm("Xonadan chiqmoqchimisiz?")) {
         window.location.reload();
     }
 }
 
+// CHAT TIZIMI
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
@@ -208,24 +237,30 @@ socket.on('createMessage', (message, userName) => {
 });
 
 function addVideoStyle(stream, titleText, peerId) {
-    if (document.getElementById(`div-${peerId}`)) return;
+    let box = document.getElementById(`div-${peerId}`);
+    
+    if (!box) {
+        box = document.createElement('div');
+        box.id = `div-${peerId}`;
+        box.className = 'video-box';
 
-    const box = document.createElement('div');
-    box.id = `div-${peerId}`;
-    box.className = 'video-box';
+        const title = document.createElement('h4');
+        title.innerText = titleText;
 
-    const title = document.createElement('h4');
-    title.innerText = titleText;
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        if (peerId === myZoomId) video.muted = true;
 
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    if (peerId === myZoomId) video.muted = true;
-
-    box.appendChild(title);
-    box.appendChild(video);
-    videoGrid.appendChild(box);
+        box.appendChild(title);
+        box.appendChild(video);
+        videoGrid.appendChild(box);
+    }
+    
+    const videoElement = box.querySelector('video');
+    if (videoElement.srcObject !== stream) {
+        videoElement.srcObject = stream;
+    }
 }
 
 socket.on('user-disconnected', userId => {
