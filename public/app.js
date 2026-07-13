@@ -4,7 +4,6 @@ const videoGrid = document.getElementById('video-grid');
 let myName = prompt("Ismingizni kiriting:") || "Mehmon_" + Math.floor(Math.random() * 1000);
 document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 
-// Har bir foydalanuvchining o'z o'zgarmas tasodifiy Zoom ID raqami
 const myZoomId = Math.floor(100000 + Math.random() * 900000).toString();
 document.getElementById('room-display').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 20px;">${myZoomId}</span>`;
 
@@ -18,7 +17,7 @@ const peer = new Peer(myZoomId, {
 let myStream;
 let screenStream = null;
 const connectedPeers = {};
-let currentActiveRoomId = myZoomId; // Standart holatda guruh ID si o'zimizniki
+let currentActiveRoomId = myZoomId; 
 
 navigator.mediaDevices.getUserMedia({
     video: true,
@@ -27,7 +26,6 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
 
-    // Xona egasi bo'lganimizda: Kimdir ruxsat olib bizga qo'ng'iroq qilsa javob beramiz
     peer.on('call', call => {
         call.answer(screenStream ? screenStream : myStream);
         call.on('stream', userRemoteStream => {
@@ -38,12 +36,11 @@ navigator.mediaDevices.getUserMedia({
     });
 });
 
-// Soketda ro'yxatdan o'tish
 peer.on('open', id => {
     socket.emit('register-me', id, myName);
 });
 
-// 1. MEHMON: Xonaga kirish uchun so'rov tashlash
+// 1. MEHMON: Xonaga ulanish so'rovi
 function askToJoin() {
     const targetId = document.getElementById('target-room-input').value.trim();
     if (!targetId) return alert("ID kiriting!");
@@ -55,37 +52,31 @@ function askToJoin() {
     socket.emit('request-join', targetId, myZoomId, myName);
 }
 
-// 2. XONA EGASI: Mehmondan so'rov kelganda modal oynani ochish
+// 2. XONA EGASI: So'rov kelganda modalni ko'rsatish
 socket.on('join-request-received', (guestPeerId, guestName) => {
     const modal = document.getElementById('lobby-modal');
     document.getElementById('lobby-msg').innerText = `"${guestName}" xonangizga kirishga ruxsat so'rayapti.`;
     modal.style.display = 'block';
 
-    // Ruxsat berish tugmasi
     document.getElementById('btn-admit').onclick = () => {
         socket.emit('join-response', guestPeerId, myZoomId, 'accepted', myName);
         modal.style.display = 'none';
-        
-        // Xona egasi sifatida guruh chatiga o'zimizni ham qo'shib qo'yamiz
         socket.emit('register-me', myZoomId, myName); 
     };
 
-    // Rad etish tugmasi
     document.getElementById('btn-reject').onclick = () => {
         socket.emit('join-response', guestPeerId, myZoomId, 'rejected', myName);
         modal.style.display = 'none';
     };
 });
 
-// 3. MEHMON: Ruxsat berilganda chaqiriladigan qism
+// 3. MEHMON: Ruxsat berilganda ulanish
 socket.on('join-accepted', (targetRoomId, hostName) => {
     document.getElementById('waiting-screen').style.display = 'none';
-    currentActiveRoomId = targetRoomId; // Endi chat shu xonaga ketadi
+    currentActiveRoomId = targetRoomId; 
     
-    // Mehmon xona egasining virtual xonasiga chat uchun ulanadi
     socket.emit('register-me', targetRoomId, myName);
 
-    // Xona egasiga to'g'ridan-to'g'ri WebRTC orqali qo'ng'iroq qilish
     const call = peer.call(targetRoomId, screenStream ? screenStream : myStream, {
         metadata: { username: myName }
     });
@@ -98,93 +89,64 @@ socket.on('join-accepted', (targetRoomId, hostName) => {
     connectedPeers[targetRoomId] = call;
 });
 
-// 4. MEHMON: Rad etilganda chaqiriladigan qism
 socket.on('join-rejected', () => {
     document.getElementById('waiting-screen').style.display = 'none';
     alert("Xona egasi sizga kirishga ruxsat bermadi!");
 });
 
-// Chat tizimi (Faqat joriy faol xona uchun)
-function sendMessage() {
-    const input = document.getElementById('messageInput');
-    if (input.value.trim() !== "") {
-        socket.emit('room-message', currentActiveRoomId, input.value, myName);
-        input.value = "";
-    }
-}
-
-socket.on('createMessage', (message, userName) => {
-    const chat = document.getElementById('chat');
-    const isMe = userName === myName;
-    chat.innerHTML += `<div><b style="color: ${isMe ? '#ccff00' : '#8ab4f8'}">${isMe ? 'Siz' : userName}:</b> ${message}</div>`;
-    chat.scrollTop = chat.scrollHeight;
-});
-
-// Mikrofon / Kamera / Ekran boshqaruvlari
+// 🛠️ MIKROFONNI DOIMIY VA TO'LIQ O'CHIRISH FUNKSIYASI (HAR IKKI TOMONDA)
 function toggleMute() {
-    // 1. O'zimizning asosiy oqimimizdagi audio trekni topamiz
     const audioTrack = myStream.getAudioTracks()[0];
-    if (!audioTrack) return alert("Mikrofon aniqlanmadi!");
+    if (!audioTrack) return alert("Mikrofon topilmadi!");
 
     const enabled = audioTrack.enabled;
-    const btn = document.getElementById('mute-btn');
-
-    // 2. Mikrofon holatini teskarisiga o'zgartiramiz
     audioTrack.enabled = !enabled;
 
-    // 3. FAOL ULANIShLAR: Boshqa suhbatdoshlarga ketayotgan audio oqimni ham to'xtatamiz/yoqamiz
+    // Boshqalarga ketayotgan audio oqimlarni ham trek darajasida to'xtatamiz
     Object.values(connectedPeers).forEach(call => {
         if (call.peerConnection) {
-            // PeerJS ulanishi ichidan faqat audio yuboruvchi trekni qidiramiz
             const audioSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
-            if (audioSender) {
-                audioSender.track.enabled = !enabled;
-            }
+            if (audioSender) audioSender.track.enabled = !enabled;
         }
     });
 
-    // 4. Tugma dizayni va matnini yangilaymiz
+    const btn = document.getElementById('mute-btn');
     if (enabled) {
-        // Hozir o'chdi (Muted)
         btn.innerText = "🎙️ Mikrofon: OFF";
-        btn.style.background = "#ea4335"; // Qizil rang
         btn.classList.add('off');
     } else {
-        // Hozir yondi (Unmuted)
         btn.innerText = "🎙️ Mikrofon: ON";
-        btn.style.background = "#3c4043"; // Standart to'q rang
         btn.classList.remove('off');
     }
+}
+
+// 📹 KAMERANI TO'LIQ O'CHIRISH FUNKSIYASI
 function toggleCamera() {
     const videoTrack = myStream.getVideoTracks()[0];
-    if (!videoTrack) return alert("Kamera aniqlanmadi!");
+    if (!videoTrack) return alert("Kamera topilmadi!");
 
     const enabled = videoTrack.enabled;
-    const btn = document.getElementById('camera-btn');
-
     videoTrack.enabled = !enabled;
 
-    // Boshqa suhbatdoshlarga ketayotgan videoni ham trek darajasida boshqarish
+    // Boshqalarga ketayotgan video oqimlarni ham trek darajasida to'xtatamiz
     Object.values(connectedPeers).forEach(call => {
         if (call.peerConnection) {
             const videoSender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (videoSender) {
-                videoSender.track.enabled = !enabled;
-            }
+            if (videoSender) videoSender.track.enabled = !enabled;
         }
     });
 
+    const btn = document.getElementById('camera-btn');
     if (enabled) {
         btn.innerText = "📹 Kamera: OFF";
-        btn.style.background = "#ea4335";
         btn.classList.add('off');
     } else {
         btn.innerText = "📹 Kamera: ON";
-        btn.style.background = "#3c4043";
         btn.classList.remove('off');
     }
 }
 
+// EKRAN ULASHISH TIZIMI
 function toggleScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     if (!screenStream) {
@@ -223,11 +185,27 @@ function stopScreenShare() {
     shareBtn.classList.remove('off');
 }
 
+// XONADAN CHIQIISh
 function leaveRoom() {
     if (confirm("Xonadan chiqmoqchimisiz?")) {
         window.location.reload();
     }
 }
+
+function sendMessage() {
+    const input = document.getElementById('messageInput');
+    if (input.value.trim() !== "") {
+        socket.emit('room-message', currentActiveRoomId, input.value, myName);
+        input.value = "";
+    }
+}
+
+socket.on('createMessage', (message, userName) => {
+    const chat = document.getElementById('chat');
+    const isMe = userName === myName;
+    chat.innerHTML += `<div><b style="color: ${isMe ? '#ccff00' : '#8ab4f8'}">${isMe ? 'Siz' : userName}:</b> ${message}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+});
 
 function addVideoStyle(stream, titleText, peerId) {
     if (document.getElementById(`div-${peerId}`)) return;
