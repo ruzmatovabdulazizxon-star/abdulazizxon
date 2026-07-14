@@ -13,13 +13,12 @@ let myPeerId;
 let myUsername = "Foydalanuvchi";
 let currentRoomId = "";
 
-// Ulangan foydalanuvchilar oqimlarini saqlash
+// Ulangan foydalanuvchilar qo'ng'iroqlarini saqlash
 const peers = {};
 
 // Ekran ulashish o'zgaruvchilari
 let screenSharing = false;
 let screenStream = null;
-let screenPeer = null;
 
 // HTML Elementlar
 const joinPanel = document.getElementById('join-panel');
@@ -83,18 +82,14 @@ socket.on('join-decision', (decision) => {
     if (decision === 'approved') {
         waitingScreen.style.display = 'none';
         
-        // Boshqalardan kelayotgan qo'ng'iroqlarni qabul qilish (PeerJS)
+        // Kiruvchi qo'ng'iroqlarni qabul qilish
         peer.on('call', (call) => {
             call.answer(myStream);
-            
-            // Kim qo'ng'iroq qilayotganini aniqlash (Ekran yoki Oddiy foydalanuvchi)
-            const isCallScreen = call.metadata && call.metadata.isScreen;
-            const label = isCallScreen ? "Ekran" : "Suhbatdosh";
-            
-            const video = createVideoElement(label, false);
+            const video = createVideoElement("Suhbatdosh", false);
             call.on('stream', (userVideoStream) => {
                 addVideoStream(video, userVideoStream, call.peer);
             });
+            peers[call.peer] = call;
         });
     } else if (decision === 'rejected') {
         waitingScreen.style.display = 'none';
@@ -135,29 +130,30 @@ btnReject.addEventListener('click', () => {
     }
 });
 
-// Xonaga yangi foydalanuvchi yoki ekran ulanganda
-socket.on('user-connected', (peerId, username, socketId, isScreen) => {
-    console.log('Ulanish aniqlandi:', username);
+// Yangi foydalanuvchiga ulanish (Call qilish)
+socket.on('user-connected', (peerId, username, socketId) => {
+    console.log('Yangi foydalanuvchi ulandi:', username);
     
-    // Yangi ulanishga avtomatik qo'ng'iroq qilish (Call)
-    // metadata orqali ekran yoki kamera oqimi ekanini uzatamiz
-    const call = peer.call(peerId, myStream, { metadata: { isScreen: isScreen } });
-    
+    const call = peer.call(peerId, myStream);
     const video = createVideoElement(username, false);
+    
     call.on('stream', (userVideoStream) => {
-        addVideoStream(video, userVideoStream, socketId);
+        addVideoStream(video, userVideoStream, peerId);
     });
 
     call.on('close', () => {
         video.remove();
     });
 
-    peers[socketId] = call;
+    peers[peerId] = call;
 });
 
-// Kimdir chiqqanda videoni o'chirish
+// Foydalanuvchi chiqqanda o'chirish
 socket.on('user-disconnected', (socketId) => {
-    if (peers[socketId]) peers[socketId].close();
+    if (peers[socketId]) {
+        peers[socketId].close();
+        delete peers[socketId];
+    }
     const videoEl = document.getElementById(socketId);
     if (videoEl) videoEl.remove();
     updateVideoLayout();
@@ -168,52 +164,47 @@ socket.on('meeting-ended', () => {
     window.location.reload();
 });
 
-
 // ==========================================
-// MUKAMMAL EKRAN ULASHISH SCRIPTlari
+// TO'G'RI EKRAN ULASHISH (REPLACE TRACK MANTIG'I)
 // ==========================================
 
 function toggleScreenShare() {
     const btn = document.getElementById('share-btn');
     
     if (!screenSharing) {
+        // Ekran ulashish datchigini so'rash
         navigator.mediaDevices.getDisplayMedia({ video: true }).then(stream => {
             screenStream = stream;
             screenSharing = true;
             btn.classList.add('off');
             btn.querySelector('span').innerText = "To'xtatish";
 
-            // Ekran uchun alohida Peer ulanishini ochish
-            screenPeer = new Peer(undefined, {
-                host: location.hostname,
-                port: location.port || (location.protocol === 'https:' ? 443 : 80),
-                path: '/peerjs'
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            // 1. O'zimizning asosiy videoda kamerani ekran rasmiga almashtirish
+            const myVideoBox = document.getElementById(socket.id);
+            if (myVideoBox) {
+                const myVideo = myVideoBox.querySelector('video');
+                myVideo.srcObject = screenStream;
+            }
+
+            // 2. Ulangan barcha foydalanuvchilarga video datchigini (track) uzatish
+            // Bu usul sahifani yangilamasdan, barcha suhbatdoshlarda videoni srazu ekranga o'zgartiradi
+            Object.values(peers).forEach(call => {
+                const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(screenTrack);
+                }
             });
 
-            screenPeer.on('open', (screenId) => {
-                // DIQQAT: Serverga ismida '(Ekran)' belgisi bilan yuboramiz. 
-                // Server buni ko'rib Lobby modalini chetlab o'tadi!
-                socket.emit('join-room', currentRoomId, `${myUsername} (Ekran)`, screenId);
-
-                // O'zimizda ham ekranni alohida oyna sifatida pastda chiroyli ko'rsatish
-                const screenBox = createVideoElement("Sizning ekraningiz", true);
-                screenBox.id = "my-screen-share";
-                addVideoStream(screenBox, screenStream, null);
-
-                // Ekran Peer ulanishi orqali xonadagilarga oqimni tarqatish
-                screenPeer.on('call', (call) => {
-                    call.answer(screenStream);
-                });
-            });
-
-            // Brauzerning o'zidan "Dostupni yopish" bosilsa
-            screenStream.getVideoTracks()[0].onended = () => {
+            // Foydalanuvchi brauzer panelidan "Stop Sharing" ni bossa
+            screenTrack.onended = () => {
                 stopScreenShare();
             };
 
         }).catch(err => {
-            console.error(err);
-            alert("Ekran ulashish rad etildi.");
+            console.error("Ekran ulashishda xatolik:", err);
+            alert("Ekran ulashish bekor qilindi.");
         });
     } else {
         stopScreenShare();
@@ -229,14 +220,30 @@ function stopScreenShare() {
         screenStream.getTracks().forEach(track => track.stop());
     }
 
-    const myScreenBox = document.getElementById("my-screen-share");
-    if (myScreenBox) myScreenBox.remove();
+    // Kamera videosini qaytadan o'zimizga tiklash
+    navigator.mediaDevices.getUserMedia({ video: true }).then(camStream => {
+        const camTrack = camStream.getVideoTracks()[0];
+        
+        // O'zimizdagi videoni kameraga qaytarish
+        const myVideoBox = document.getElementById(socket.id);
+        if (myVideoBox) {
+            const myVideo = myVideoBox.querySelector('video');
+            myVideo.srcObject = myStream;
+        }
 
-    if (screenPeer) {
-        screenPeer.destroy();
-    }
+        // Boshqa barcha foydalanuvchilarga kamera datchigini qayta yuborish
+        Object.values(peers).forEach(call => {
+            const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
+            if (sender) {
+                sender.replaceTrack(camTrack);
+            }
+        });
 
-    socket.emit('leave-screen', currentRoomId);
+        // Eski kamera oqimini yangilash
+        myStream.removeTrack(myStream.getVideoTracks()[0]);
+        myStream.addTrack(camTrack);
+
+    }).catch(err => console.error("Kamerani qayta yoqishda xatolik:", err));
 
     screenSharing = false;
     screenStream = null;
@@ -245,16 +252,6 @@ function stopScreenShare() {
     
     updateVideoLayout();
 }
-
-// Boshqalarda ekran o'chganda uni ekrandan yo'q qilish
-socket.on('screen-disconnected', (screenId) => {
-    const remoteScreenBox = document.getElementById(screenId);
-    if (remoteScreenBox) {
-        remoteScreenBox.remove();
-    }
-    updateVideoLayout();
-});
-
 
 // ==========================================
 // VIZUAL VA CHAT FUNKSIYALARI
@@ -265,7 +262,7 @@ function createVideoElement(labelName, isMe) {
     box.classList.add('video-box');
     
     const video = document.createElement('video');
-    if (isMe) video.muted = true; // O'z ovozimiz qaytmasligi uchun
+    if (isMe) video.muted = true;
     
     const overlay = document.createElement('div');
     overlay.classList.add('video-overlay');
@@ -276,15 +273,15 @@ function createVideoElement(labelName, isMe) {
     return box;
 }
 
-function addVideoStream(videoBox, stream, socketId) {
+function addVideoStream(videoBox, stream, id) {
     const video = videoBox.querySelector('video');
     video.srcObject = stream;
     video.addEventListener('loadedmetadata', () => {
         video.play();
     });
     
-    if (socketId) {
-        videoBox.id = socketId;
+    if (id) {
+        videoBox.id = id;
     }
     
     videoGrid.appendChild(videoBox);
