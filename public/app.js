@@ -1,7 +1,7 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-// PeerJS sozlamalari (Render yoki lokal xost uchun moslashuvchan)
+// PeerJS sozlamalari
 const peer = new Peer(undefined, {
     host: location.hostname,
     port: location.port || (location.protocol === 'https:' ? 443 : 80),
@@ -12,14 +12,16 @@ let myStream;
 let myPeerId;
 let myUsername = "Foydalanuvchi";
 let currentRoomId = "";
+
+// Ulangan foydalanuvchilar oqimlarini saqlash
 const peers = {};
 
-// Ekran ulashish oqimlari uchun o'zgaruvchilar
+// Ekran ulashish o'zgaruvchilari
 let screenSharing = false;
 let screenStream = null;
 let screenPeer = null;
 
-// HTML elementlar bilan ishlash
+// HTML Elementlar
 const joinPanel = document.getElementById('join-panel');
 const usernameInput = document.getElementById('username-input');
 const targetRoomInput = document.getElementById('target-room-input');
@@ -33,18 +35,16 @@ const chatSidebar = document.getElementById('chat-sidebar');
 const messageInput = document.getElementById('messageInput');
 const chatMessages = document.getElementById('chat-messages');
 
-let pendingUser = null; // Kutayotgan foydalanuvchi ob'ekti (Admin uchun)
-
-// Kamera va mikrofon holatlari
+let pendingUser = null;
 let audioMuted = false;
 let videoOff = false;
 
-// Peer ID olinganda ishga tushadi
+// O'z Peer IDimizni olish
 peer.on('open', (id) => {
     myPeerId = id;
 });
 
-// Uchrashuvga kirishni boshlash funksiyasi
+// Uchrashuvga kirish
 function startMeeting() {
     const inputName = usernameInput.value.trim();
     if (!inputName) {
@@ -54,62 +54,62 @@ function startMeeting() {
     myUsername = inputName;
     
     const targetRoom = targetRoomInput.value.trim();
-    // Agar xona ID yozilmagan bo'lsa, yangi xona (tasodifiy ID) yaratiladi
     currentRoomId = targetRoom || Math.floor(100000 + Math.random() * 900000).toString();
     roomDisplay.innerText = currentRoomId;
 
-    // Kirish oynasini yopish
     joinPanel.style.display = 'none';
 
-    // Kamerani yoqish va xonaga ulanish jarayonini boshlash
+    // Kamera va mikrofonga ruxsat olish
     navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
     }).then(stream => {
         myStream = stream;
         
-        // O'z videomizni ekranga chiqarish
+        // O'z videomizni ekranga qo'shish
         addVideoStream(createVideoElement(myUsername + " (Siz)", true), stream, socket.id);
 
-        // Birinchi bo'lib xona ruxsatini tekshirish uchun so'rov jo'natamiz
-        waitingScreen.style.display = 'flex'; // Vaqtincha kutish rejimini ko'rsatamiz
+        // Lobby (Kutish ekrani)ni yoqish va serverga so'rov yuborish
+        waitingScreen.style.display = 'flex';
         socket.emit('join-room', currentRoomId, myUsername, myPeerId);
     }).catch(err => {
-        console.error("Kamera yoki mikrofonga ruxsat berilmadi:", err);
-        alert("Kamera va mikrofonga ruxsat berishingiz shart!");
+        console.error(err);
+        alert("Kamera va mikrofonga ruxsat berishingiz zarur!");
     });
 }
 
-// Admin qarori natijasi kelganda
+// Admin javobi kelganda
 socket.on('join-decision', (decision) => {
     if (decision === 'approved') {
-        // Tasdiqlansa: kutish ekranini yopamiz
         waitingScreen.style.display = 'none';
-        console.log("Xonaga ulanish muvaffaqiyatli tasdiqlandi!");
         
-        // Qo'ng'iroqlarni qabul qilish (PeerJS)
+        // Boshqalardan kelayotgan qo'ng'iroqlarni qabul qilish (PeerJS)
         peer.on('call', (call) => {
             call.answer(myStream);
-            const video = createVideoElement("Suhbatdosh", false);
+            
+            // Kim qo'ng'iroq qilayotganini aniqlash (Ekran yoki Oddiy foydalanuvchi)
+            const isCallScreen = call.metadata && call.metadata.isScreen;
+            const label = isCallScreen ? "Ekran" : "Suhbatdosh";
+            
+            const video = createVideoElement(label, false);
             call.on('stream', (userVideoStream) => {
                 addVideoStream(video, userVideoStream, call.peer);
             });
         });
     } else if (decision === 'rejected') {
         waitingScreen.style.display = 'none';
-        alert("Ruxsat berilmadi: Xona egasi sizning kirishingizni rad etdi.");
+        alert("Ruxsat berilmadi: Admin kirishingizni rad etdi.");
         window.location.reload();
     }
 });
 
-// Admin uchun: yangi foydalanuvchi kirishni so'raganda ruxsat paneli chiqishi
+// Admin uchun: Mehmon kelganda modalni ochish
 socket.on('request-join', (data) => {
-    pendingUser = data; // so'rayotgan foydalanuvchi (socketId, username, peerId, roomId)
-    lobbyMsg.innerText = `"${data.username}" uchrashuvga kirishni so'rayapti.`;
-    lobbyModal.style.display = 'flex'; // Modalni ko'rsatish
+    pendingUser = data;
+    lobbyMsg.innerText = `"${data.username}" kirishni so'rayapti.`;
+    lobbyModal.style.display = 'flex';
 });
 
-// Admin ruxsat berish tugmasini bosganda
 btnAdmit.addEventListener('click', () => {
     if (pendingUser) {
         socket.emit('admin-decision', {
@@ -124,7 +124,6 @@ btnAdmit.addEventListener('click', () => {
     }
 });
 
-// Admin rad etish tugmasini bosganda
 btnReject.addEventListener('click', () => {
     if (pendingUser) {
         socket.emit('admin-decision', {
@@ -136,14 +135,15 @@ btnReject.addEventListener('click', () => {
     }
 });
 
-// Xonaga yangi foydalanuvchi ulanganda (WebRTC PeerJS aloqasi)
-socket.on('user-connected', (peerId, username, socketId) => {
-    console.log('Yangi foydalanuvchi ulandi:', peerId);
+// Xonaga yangi foydalanuvchi yoki ekran ulanganda
+socket.on('user-connected', (peerId, username, socketId, isScreen) => {
+    console.log('Ulanish aniqlandi:', username);
     
-    // Yangi foydalanuvchiga video oqimini yuborish (Call)
-    const call = peer.call(peerId, myStream);
+    // Yangi ulanishga avtomatik qo'ng'iroq qilish (Call)
+    // metadata orqali ekran yoki kamera oqimi ekanini uzatamiz
+    const call = peer.call(peerId, myStream, { metadata: { isScreen: isScreen } });
+    
     const video = createVideoElement(username, false);
-    
     call.on('stream', (userVideoStream) => {
         addVideoStream(video, userVideoStream, socketId);
     });
@@ -155,7 +155,7 @@ socket.on('user-connected', (peerId, username, socketId) => {
     peers[socketId] = call;
 });
 
-// Kimdir xonadan chiqqanda videoni o'chirish
+// Kimdir chiqqanda videoni o'chirish
 socket.on('user-disconnected', (socketId) => {
     if (peers[socketId]) peers[socketId].close();
     const videoEl = document.getElementById(socketId);
@@ -163,28 +163,27 @@ socket.on('user-disconnected', (socketId) => {
     updateVideoLayout();
 });
 
-// Admin chiqib ketgan taqdirda uchrashuvni yakunlash
 socket.on('meeting-ended', () => {
-    alert("Xona egasi uchrashuvni yakunladi.");
+    alert("Admin uchrashuvni yakunladi.");
     window.location.reload();
 });
 
+
 // ==========================================
-// EKRAN ULASHISHNING PROFESSIONAL TIZIMI
+// MUKAMMAL EKRAN ULASHISH SCRIPTlari
 // ==========================================
 
 function toggleScreenShare() {
     const btn = document.getElementById('share-btn');
     
     if (!screenSharing) {
-        // Ekran datchigini brauzerdan so'rash
         navigator.mediaDevices.getDisplayMedia({ video: true }).then(stream => {
             screenStream = stream;
             screenSharing = true;
             btn.classList.add('off');
-            btn.querySelector('span').innerText = "Ulashishni to'xtatish";
+            btn.querySelector('span').innerText = "To'xtatish";
 
-            // Ekran uchun alohida yangi PeerJS ob'ekti yaratamiz
+            // Ekran uchun alohida Peer ulanishini ochish
             screenPeer = new Peer(undefined, {
                 host: location.hostname,
                 port: location.port || (location.protocol === 'https:' ? 443 : 80),
@@ -192,23 +191,29 @@ function toggleScreenShare() {
             });
 
             screenPeer.on('open', (screenId) => {
-                // Serverga xuddi yangi foydalanuvchi kabi ulashgan ekranimizni jo'natamiz
+                // DIQQAT: Serverga ismida '(Ekran)' belgisi bilan yuboramiz. 
+                // Server buni ko'rib Lobby modalini chetlab o'tadi!
                 socket.emit('join-room', currentRoomId, `${myUsername} (Ekran)`, screenId);
+
+                // O'zimizda ham ekranni alohida oyna sifatida pastda chiroyli ko'rsatish
+                const screenBox = createVideoElement("Sizning ekraningiz", true);
+                screenBox.id = "my-screen-share";
+                addVideoStream(screenBox, screenStream, null);
+
+                // Ekran Peer ulanishi orqali xonadagilarga oqimni tarqatish
+                screenPeer.on('call', (call) => {
+                    call.answer(screenStream);
+                });
             });
 
-            // Bizga ekranni ko'rsatish
-            const screenBox = createVideoElement(`${myUsername} (Ekran)`, true);
-            screenBox.id = "my-screen-share";
-            addVideoStream(screenBox, screenStream, null);
-
-            // Foydalanuvchi brauzer panelidan "Ekran bo'lishishni to'xtatish" tugmasini bossa
+            // Brauzerning o'zidan "Dostupni yopish" bosilsa
             screenStream.getVideoTracks()[0].onended = () => {
                 stopScreenShare();
             };
 
         }).catch(err => {
-            console.error("Ekran ulashishda xatolik:", err);
-            alert("Ekran ulashish rad etildi yoki xatolik yuz berdi.");
+            console.error(err);
+            alert("Ekran ulashish rad etildi.");
         });
     } else {
         stopScreenShare();
@@ -220,32 +225,28 @@ function stopScreenShare() {
 
     const btn = document.getElementById('share-btn');
     
-    // Oqimlarni to'xtatish
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
     }
 
-    // O'zimizdagi ekran oynasini o'chirish
     const myScreenBox = document.getElementById("my-screen-share");
     if (myScreenBox) myScreenBox.remove();
 
-    // Ekran Peer ulanishini yo'q qilish
     if (screenPeer) {
         screenPeer.destroy();
     }
 
-    // Serverga ekran uzilganini bildirish
     socket.emit('leave-screen', currentRoomId);
 
     screenSharing = false;
     screenStream = null;
     btn.classList.remove('off');
-    btn.querySelector('span').innerText = "Ekran ulashish";
+    btn.querySelector('span').innerText = "Ekran";
     
     updateVideoLayout();
 }
 
-// Serverdan ekran o'chirilgani haqida xabar kelsa
+// Boshqalarda ekran o'chganda uni ekrandan yo'q qilish
 socket.on('screen-disconnected', (screenId) => {
     const remoteScreenBox = document.getElementById(screenId);
     if (remoteScreenBox) {
@@ -253,6 +254,7 @@ socket.on('screen-disconnected', (screenId) => {
     }
     updateVideoLayout();
 });
+
 
 // ==========================================
 // VIZUAL VA CHAT FUNKSIYALARI
@@ -263,7 +265,7 @@ function createVideoElement(labelName, isMe) {
     box.classList.add('video-box');
     
     const video = document.createElement('video');
-    if (isMe) video.muted = true; // O'z ovozimiz aks-sado bermasligi uchun
+    if (isMe) video.muted = true; // O'z ovozimiz qaytmasligi uchun
     
     const overlay = document.createElement('div');
     overlay.classList.add('video-overlay');
@@ -289,7 +291,6 @@ function addVideoStream(videoBox, stream, socketId) {
     updateVideoLayout();
 }
 
-// Videolar soniga qarab ekran kataklarini (Grid) avtomatik moslashtirish
 function updateVideoLayout() {
     const videoCount = videoGrid.children.length;
     let columns = 1;
@@ -298,7 +299,6 @@ function updateVideoLayout() {
     videoGrid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
 }
 
-// Boshqaruv tugmalari funksiyalari
 function toggleMute() {
     audioMuted = !audioMuted;
     myStream.getAudioTracks()[0].enabled = !audioMuted;
@@ -310,11 +310,11 @@ function toggleMute() {
     if (audioMuted) {
         btn.classList.add('off');
         icon.className = 'fa-solid fa-microphone-slash';
-        span.innerText = "Ovozni yoqish";
+        span.innerText = "Mikrofon: OFF";
     } else {
         btn.classList.remove('off');
         icon.className = 'fa-solid fa-microphone';
-        span.innerText = "Ovozni o'chirish";
+        span.innerText = "Mikrofon: ON";
     }
 }
 
@@ -329,15 +329,14 @@ function toggleCamera() {
     if (videoOff) {
         btn.classList.add('off');
         icon.className = 'fa-solid fa-video-slash';
-        span.innerText = "Kamerani yoqish";
+        span.innerText = "Kamera: OFF";
     } else {
         btn.classList.remove('off');
         icon.className = 'fa-solid fa-video';
-        span.innerText = "Kamerani o'chirish";
+        span.innerText = "Kamera: ON";
     }
 }
 
-// Chat boshqaruvi
 function toggleChat() {
     chatSidebar.classList.toggle('closed');
 }
@@ -352,10 +351,7 @@ function sendMessage() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Chat xabarini serverga (va boshqalarga) jo'natish
     socket.emit('send-chat-message', currentRoomId, messageData);
-
-    // O'zimizga xabarni chiroyli qilib qo'shish
     appendMessage(messageData, true);
     messageInput.value = "";
 }
@@ -380,10 +376,9 @@ function appendMessage(data, isMe) {
         <div>${data.text}</div>
     `;
     chatMessages.appendChild(msgEl);
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Avtomatik pastga tushish
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Xonadan chiqib ketish
 function leaveRoom() {
     if (confirm("Uchrashuvdan chiqishni xohlaysizmi?")) {
         window.location.reload();
