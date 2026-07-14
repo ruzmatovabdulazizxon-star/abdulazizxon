@@ -7,7 +7,7 @@ document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 const myZoomId = Math.floor(100000 + Math.random() * 900000).toString();
 document.getElementById('room-display').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 20px;">${myZoomId}</span>`;
 
-// YANGILANGAN PEERJS SOZLAMALARI (Mobil tarmoqlar va turli internet provayderlar uchun STUN/TURN serverlari bilan)
+// YANGILANGAN VA KUCHAYTIRILGAN ICE SERVERS (STUN/TURN)
 const peer = new Peer(myZoomId, {
     path: '/peerjs',
     host: '/',
@@ -15,14 +15,13 @@ const peer = new Peer(myZoomId, {
     secure: true,
     config: {
         'iceServers': [
-            // Google bepul STUN serverlari (IP manzillarni to'g'ri aniqlash uchun)
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
             
-            // Metered bepul umumiy TURN serverlari (Mobil internet (NAT/Firewall) to'siqlarini aylanib o'tish uchun)
+            // Metered Global TURN serverlar (Muqobil variantlari bilan)
             {
                 urls: 'turn:openrelay.metered.ca:80',
                 username: 'openrelay',
@@ -38,37 +37,55 @@ const peer = new Peer(myZoomId, {
                 username: 'openrelay',
                 credential: 'openrelay'
             }
-        ]
+        ],
+        // Ulanish sifatini oshirish uchun qo'shimcha parametrlar
+        'iceCandidatePoolSize': 10
     }
 });
 
-let myStream;
+let myStream = null;
 let screenStream = null;
 const connectedPeers = {};
 let currentActiveRoomId = myZoomId; 
 
-navigator.mediaDevices.getUserMedia({
-    video: true,
+// Mobil va kompyuter kameralari uchun moslashtirilgan sozlamalar
+const mediaConstraints = {
+    video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        facingMode: "user" // Telefonning old kamerasini tanlash
+    },
     audio: true
-}).then(stream => {
-    myStream = stream;
-    addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
+};
 
-    // Kiruvchi qo'ng'iroqlarni qabul qilish (Xona egasi yoki xonadagi boshqa mehmonlardan)
-    peer.on('call', call => {
-        call.answer(screenStream ? screenStream : myStream);
-        
-        call.on('stream', userRemoteStream => {
-            const callerName = call.options.metadata ? call.options.metadata.username : "Suhbatdosh";
-            addVideoStyle(userRemoteStream, callerName, call.peer);
+navigator.mediaDevices.getUserMedia(mediaConstraints)
+    .then(stream => {
+        myStream = stream;
+        addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
+
+        peer.on('call', call => {
+            call.answer(screenStream ? screenStream : myStream);
+            
+            call.on('stream', userRemoteStream => {
+                const callerName = call.options.metadata ? call.options.metadata.username : "Suhbatdosh";
+                addVideoStyle(userRemoteStream, callerName, call.peer);
+            });
+            
+            connectedPeers[call.peer] = call;
         });
-        
-        connectedPeers[call.peer] = call;
+    })
+    .catch(err => {
+        console.error("Kamera yoki mikrofonga ulanib bo'lmadi:", err);
+        alert("Xatolik: Kamera yoki mikrofonga ruxsat berilmadi yoki u boshqa ilova tomonidan band! Iltimos, brauzer sozlamalaridan ruxsat bering.");
     });
-});
 
 peer.on('open', id => {
     socket.emit('register-me', id, myName);
+});
+
+// Peer ulanish xatolarini ushlash diagnostikasi
+peer.on('error', err => {
+    console.error("PeerJS Xatoligi:", err);
 });
 
 // 1. MEHMON: Kirish so'rovini yuborish
@@ -83,7 +100,7 @@ function askToJoin() {
     socket.emit('request-join', targetId, myZoomId, myName);
 }
 
-// 2. FAQAT HAQIQIY ADMIN (HOST): So'rov faqat adminda ko'rinadi, mehmonlarda chiqmaydi
+// 2. FAQAT HAQIQIY ADMIN: So'rov faqat adminda ko'rinadi
 socket.on('join-request-received', (guestPeerId, guestName) => {
     const modal = document.getElementById('lobby-modal');
     document.getElementById('lobby-msg').innerText = `"${guestName}" xonangizga kirishga ruxsat so'rayapti.`;
@@ -106,19 +123,19 @@ socket.on('join-accepted', (targetRoomId, hostName) => {
     currentActiveRoomId = targetRoomId; 
     
     socket.emit('join-room-flow', targetRoomId, myZoomId);
-
-    // To'g'ridan to'g'ri Admin bilan video aloqa ulanishini hosil qilamiz
     connectToNewUser(targetRoomId, hostName);
 });
 
-// 4. XONADAGI MEHMONLAR: Yangi mehmon kirganida u bilan avtomatik ulanish
+// 4. XONADAGI MEHMONLAR: Yangi mehmon kirganida u bilan ulanish
 socket.on('user-joined-room', (newUserId) => {
-    // Yangi kelgan foydalanuvchi bilan ulanishni yaratamiz
     connectToNewUser(newUserId, "Suhbatdosh");
 });
 
-// PeerJS ulanish funksiyasi
 function connectToNewUser(userId, userName) {
+    if (!myStream) {
+        console.warn("Mahalliy oqim (myStream) mavjud emas, ulanish amalga oshmadi.");
+        return;
+    }
     const call = peer.call(userId, screenStream ? screenStream : myStream, {
         metadata: { username: myName }
     });
@@ -138,6 +155,7 @@ socket.on('join-rejected', () => {
 
 // MIKROFON boshqaruvi
 function toggleMute() {
+    if (!myStream) return alert("Mikrofon oqimi yuklanmagan!");
     const audioTrack = myStream.getAudioTracks()[0];
     if (!audioTrack) return alert("Mikrofon topilmadi!");
 
@@ -163,6 +181,7 @@ function toggleMute() {
 
 // KAMERA boshqaruvi
 function toggleCamera() {
+    if (!myStream) return alert("Kamera oqimi yuklanmagan!");
     const videoTrack = myStream.getVideoTracks()[0];
     if (!videoTrack) return alert("Kamera topilmadi!");
 
@@ -186,7 +205,7 @@ function toggleCamera() {
     }
 }
 
-// SINXRON EKRAN ULASHISH (F5-siz ishlaydi)
+// EKRAN ULASHISH
 function toggleScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     
@@ -199,7 +218,6 @@ function toggleScreenShare() {
                 const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
                 myVideoElement.srcObject = screenStream;
 
-                // Barcha ulangan suhbatdoshlarga video oqimni yangilaymiz
                 Object.values(connectedPeers).forEach(call => {
                     if (call.peerConnection) {
                         const senders = call.peerConnection.getSenders();
@@ -215,13 +233,12 @@ function toggleScreenShare() {
 
                 videoTrack.onended = () => { stopScreenShare(); };
             })
-            .catch(err => console.log("Ekran ulashishda xatolik: ", err));
+            .catch(err => console.log(err));
     } else {
         stopScreenShare();
     }
 }
 
-// EKRAN ULASHISHNI TO'XTATISH
 function stopScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     if (!screenStream) return;
@@ -247,14 +264,12 @@ function stopScreenShare() {
     shareBtn.classList.remove('off');
 }
 
-// LEAVE ROOM
 function leaveRoom() {
     if (confirm("Xonadan chiqmoqchimisiz?")) {
         window.location.reload();
     }
 }
 
-// CHAT TIZIMI
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
@@ -270,7 +285,6 @@ socket.on('createMessage', (message, userName) => {
     chat.scrollTop = chat.scrollHeight;
 });
 
-// HTML-GA VIDEO ELEMENTLARINI QO'SHISH
 function addVideoStyle(stream, titleText, peerId) {
     let box = document.getElementById(`div-${peerId}`);
     
@@ -285,7 +299,7 @@ function addVideoStyle(stream, titleText, peerId) {
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
-        if (peerId === myZoomId) video.muted = true; // O'zimizning ovozimiz qaytib eshitilmasligi uchun
+        if (peerId === myZoomId) video.muted = true;
 
         box.appendChild(title);
         box.appendChild(video);
