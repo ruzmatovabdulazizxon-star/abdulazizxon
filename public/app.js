@@ -7,11 +7,39 @@ document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 const myZoomId = Math.floor(100000 + Math.random() * 900000).toString();
 document.getElementById('room-display').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 20px;">${myZoomId}</span>`;
 
+// YANGILANGAN PEERJS SOZLAMALARI (Mobil tarmoqlar va turli internet provayderlar uchun STUN/TURN serverlari bilan)
 const peer = new Peer(myZoomId, {
     path: '/peerjs',
     host: '/',
     port: '443',
-    secure: true
+    secure: true,
+    config: {
+        'iceServers': [
+            // Google bepul STUN serverlari (IP manzillarni to'g'ri aniqlash uchun)
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            
+            // Metered bepul umumiy TURN serverlari (Mobil internet (NAT/Firewall) to'siqlarini aylanib o'tish uchun)
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelay',
+                credential: 'openrelay'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelay',
+                credential: 'openrelay'
+            },
+            {
+                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelay',
+                credential: 'openrelay'
+            }
+        ]
+    }
 });
 
 let myStream;
@@ -26,6 +54,7 @@ navigator.mediaDevices.getUserMedia({
     myStream = stream;
     addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
 
+    // Kiruvchi qo'ng'iroqlarni qabul qilish (Xona egasi yoki xonadagi boshqa mehmonlardan)
     peer.on('call', call => {
         call.answer(screenStream ? screenStream : myStream);
         
@@ -54,7 +83,7 @@ function askToJoin() {
     socket.emit('request-join', targetId, myZoomId, myName);
 }
 
-// 2. FAQAT HAQIQIY ADMIN: So'rov faqat adminda ko'rinadi
+// 2. FAQAT HAQIQIY ADMIN (HOST): So'rov faqat adminda ko'rinadi, mehmonlarda chiqmaydi
 socket.on('join-request-received', (guestPeerId, guestName) => {
     const modal = document.getElementById('lobby-modal');
     document.getElementById('lobby-msg').innerText = `"${guestName}" xonangizga kirishga ruxsat so'rayapti.`;
@@ -78,16 +107,17 @@ socket.on('join-accepted', (targetRoomId, hostName) => {
     
     socket.emit('join-room-flow', targetRoomId, myZoomId);
 
-    // To'g'ridan to'g'ri Admin bilan ulanish hosil qilamiz
+    // To'g'ridan to'g'ri Admin bilan video aloqa ulanishini hosil qilamiz
     connectToNewUser(targetRoomId, hostName);
 });
 
 // 4. XONADAGI MEHMONLAR: Yangi mehmon kirganida u bilan avtomatik ulanish
 socket.on('user-joined-room', (newUserId) => {
-    // Yangi kelgan odam bilan avtomatik bog'lanish
+    // Yangi kelgan foydalanuvchi bilan ulanishni yaratamiz
     connectToNewUser(newUserId, "Suhbatdosh");
 });
 
+// PeerJS ulanish funksiyasi
 function connectToNewUser(userId, userName) {
     const call = peer.call(userId, screenStream ? screenStream : myStream, {
         metadata: { username: myName }
@@ -156,7 +186,7 @@ function toggleCamera() {
     }
 }
 
-// EKRAN ULASHISh
+// SINXRON EKRAN ULASHISH (F5-siz ishlaydi)
 function toggleScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     
@@ -169,6 +199,7 @@ function toggleScreenShare() {
                 const myVideoElement = document.getElementById(`div-${myZoomId}`).querySelector('video');
                 myVideoElement.srcObject = screenStream;
 
+                // Barcha ulangan suhbatdoshlarga video oqimni yangilaymiz
                 Object.values(connectedPeers).forEach(call => {
                     if (call.peerConnection) {
                         const senders = call.peerConnection.getSenders();
@@ -184,12 +215,13 @@ function toggleScreenShare() {
 
                 videoTrack.onended = () => { stopScreenShare(); };
             })
-            .catch(err => console.log(err));
+            .catch(err => console.log("Ekran ulashishda xatolik: ", err));
     } else {
         stopScreenShare();
     }
 }
 
+// EKRAN ULASHISHNI TO'XTATISH
 function stopScreenShare() {
     const shareBtn = document.getElementById('share-btn');
     if (!screenStream) return;
@@ -215,12 +247,14 @@ function stopScreenShare() {
     shareBtn.classList.remove('off');
 }
 
+// LEAVE ROOM
 function leaveRoom() {
     if (confirm("Xonadan chiqmoqchimisiz?")) {
         window.location.reload();
     }
 }
 
+// CHAT TIZIMI
 function sendMessage() {
     const input = document.getElementById('messageInput');
     if (input.value.trim() !== "") {
@@ -236,6 +270,7 @@ socket.on('createMessage', (message, userName) => {
     chat.scrollTop = chat.scrollHeight;
 });
 
+// HTML-GA VIDEO ELEMENTLARINI QO'SHISH
 function addVideoStyle(stream, titleText, peerId) {
     let box = document.getElementById(`div-${peerId}`);
     
@@ -250,7 +285,7 @@ function addVideoStyle(stream, titleText, peerId) {
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
-        if (peerId === myZoomId) video.muted = true;
+        if (peerId === myZoomId) video.muted = true; // O'zimizning ovozimiz qaytib eshitilmasligi uchun
 
         box.appendChild(title);
         box.appendChild(video);
