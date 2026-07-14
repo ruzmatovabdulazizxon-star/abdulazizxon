@@ -7,21 +7,21 @@ document.getElementById('welcome-user').innerText = `Hush kelibsiz, ${myName}!`;
 const myZoomId = Math.floor(100000 + Math.random() * 900000).toString();
 document.getElementById('room-display').innerHTML = `Sizning Xona ID: <span style="color: #ccff00; font-size: 20px;">${myZoomId}</span>`;
 
-// YANGILANGAN VA KUCHAYTIRILGAN ICE SERVERS (STUN/TURN)
+// YANGI VA BARQAROR BULUTLI PEERJS SOZLAMALARI (Render-dan butunlay mustaqil)
 const peer = new Peer(myZoomId, {
-    path: '/peerjs',
-    host: '/',
-    port: '443',
+    host: '0.peerjs.com', // Global Bulutli PeerJS Signaling Serverdan foydalanamiz
+    port: 443,
     secure: true,
     config: {
         'iceServers': [
+            // Google ochiq STUN serverlari
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
             { urls: 'stun:stun4.l.google.com:19302' },
             
-            // Metered Global TURN serverlar (Muqobil variantlari bilan)
+            // Metered Global TURN serverlar (Mobil operatorlar NAT/Firewall to'siqlarini yorib o'tish uchun)
             {
                 urls: 'turn:openrelay.metered.ca:80',
                 username: 'openrelay',
@@ -38,7 +38,8 @@ const peer = new Peer(myZoomId, {
                 credential: 'openrelay'
             }
         ],
-        // Ulanish sifatini oshirish uchun qo'shimcha parametrlar
+        // Mobil aloqada (UDP cheklangan bo'lsa) ulanishni majburiy TCP orqali ulash
+        'iceTransportPolicy': 'all', 
         'iceCandidatePoolSize': 10
     }
 });
@@ -48,12 +49,13 @@ let screenStream = null;
 const connectedPeers = {};
 let currentActiveRoomId = myZoomId; 
 
-// Mobil va kompyuter kameralari uchun moslashtirilgan sozlamalar
+// Mobil brauzerlarda kamera muammolarini chetlab o'tish uchun o'lchamni optimallashtiramiz
 const mediaConstraints = {
     video: {
         width: { ideal: 640 },
         height: { ideal: 480 },
-        facingMode: "user" // Telefonning old kamerasini tanlash
+        frameRate: { ideal: 24 },
+        facingMode: "user" // Old kamera
     },
     audio: true
 };
@@ -63,6 +65,7 @@ navigator.mediaDevices.getUserMedia(mediaConstraints)
         myStream = stream;
         addVideoStyle(myStream, `${myName} (Siz)`, myZoomId);
 
+        // Kiruvchi video qo'ng'iroqlarga javob berish
         peer.on('call', call => {
             call.answer(screenStream ? screenStream : myStream);
             
@@ -75,17 +78,19 @@ navigator.mediaDevices.getUserMedia(mediaConstraints)
         });
     })
     .catch(err => {
-        console.error("Kamera yoki mikrofonga ulanib bo'lmadi:", err);
-        alert("Xatolik: Kamera yoki mikrofonga ruxsat berilmadi yoki u boshqa ilova tomonidan band! Iltimos, brauzer sozlamalaridan ruxsat bering.");
+        console.error("Kameraga ulanishda xatolik:", err);
+        alert("Xatolik: Iltimos brauzeringizda kamera va mikrofonga ruxsat bering!");
     });
 
 peer.on('open', id => {
     socket.emit('register-me', id, myName);
 });
 
-// Peer ulanish xatolarini ushlash diagnostikasi
 peer.on('error', err => {
-    console.error("PeerJS Xatoligi:", err);
+    console.error("PeerJS Xatoligi yuz berdi:", err.type);
+    if(err.type === 'peer-unavailable') {
+        console.log("Ulanmoqchi bo'lgan foydalanuvchi tarmoqdan uzilgan yoki topilmadi.");
+    }
 });
 
 // 1. MEHMON: Kirish so'rovini yuborish
@@ -133,7 +138,7 @@ socket.on('user-joined-room', (newUserId) => {
 
 function connectToNewUser(userId, userName) {
     if (!myStream) {
-        console.warn("Mahalliy oqim (myStream) mavjud emas, ulanish amalga oshmadi.");
+        console.warn("Mahalliy kamera oqimi tayyor emas.");
         return;
     }
     const call = peer.call(userId, screenStream ? screenStream : myStream, {
@@ -155,7 +160,7 @@ socket.on('join-rejected', () => {
 
 // MIKROFON boshqaruvi
 function toggleMute() {
-    if (!myStream) return alert("Mikrofon oqimi yuklanmagan!");
+    if (!myStream) return alert("Mikrofon yuklanmagan!");
     const audioTrack = myStream.getAudioTracks()[0];
     if (!audioTrack) return alert("Mikrofon topilmadi!");
 
@@ -181,7 +186,7 @@ function toggleMute() {
 
 // KAMERA boshqaruvi
 function toggleCamera() {
-    if (!myStream) return alert("Kamera oqimi yuklanmagan!");
+    if (!myStream) return alert("Kamera yuklanmagan!");
     const videoTrack = myStream.getVideoTracks()[0];
     if (!videoTrack) return alert("Kamera topilmadi!");
 
@@ -299,7 +304,9 @@ function addVideoStyle(stream, titleText, peerId) {
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
-        if (peerId === myZoomId) video.muted = true;
+        if (peerId === myZoomId) {
+            video.muted = true; // O'z ovozi aks-sado bermasligi uchun
+        }
 
         box.appendChild(title);
         box.appendChild(video);
