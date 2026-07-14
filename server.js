@@ -73,6 +73,12 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('chat-message', messageData);
     });
 
+    // Ekran ulashish to'xtatilganda boshqalardan ham videoni darhol o'chirish
+    socket.on('leave-screen', (roomId) => {
+        socket.to(roomId).emit('user-disconnected', socket.id);
+        socket.to(roomId).emit('screen-disconnected', socket.id);
+    });
+
     // Foydalanuvchi aloqadan uzilganda
     socket.on('disconnect', () => {
         console.log('Foydalanuvchi uzildi:', socket.id);
@@ -89,6 +95,7 @@ io.on('connection', (socket) => {
         
         // Barcha foydalanuvchilarga ushbu socket uzilganini e'lon qilish
         io.emit('user-disconnected', socket.id);
+        io.emit('screen-disconnected', socket.id);
     });
 });
 
