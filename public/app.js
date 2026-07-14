@@ -14,6 +14,11 @@ let myUsername = "Foydalanuvchi";
 let currentRoomId = "";
 const peers = {};
 
+// Ekran ulashish oqimlari uchun o'zgaruvchilar
+let screenSharing = false;
+let screenStream = null;
+let screenPeer = null;
+
 // HTML elementlar bilan ishlash
 const joinPanel = document.getElementById('join-panel');
 const usernameInput = document.getElementById('username-input');
@@ -33,8 +38,6 @@ let pendingUser = null; // Kutayotgan foydalanuvchi ob'ekti (Admin uchun)
 // Kamera va mikrofon holatlari
 let audioMuted = false;
 let videoOff = false;
-let screenSharing = false;
-let screenStream = null;
 
 // Peer ID olinganda ishga tushadi
 peer.on('open', (id) => {
@@ -167,6 +170,91 @@ socket.on('meeting-ended', () => {
 });
 
 // ==========================================
+// EKRAN ULASHISHNING PROFESSIONAL TIZIMI
+// ==========================================
+
+function toggleScreenShare() {
+    const btn = document.getElementById('share-btn');
+    
+    if (!screenSharing) {
+        // Ekran datchigini brauzerdan so'rash
+        navigator.mediaDevices.getDisplayMedia({ video: true }).then(stream => {
+            screenStream = stream;
+            screenSharing = true;
+            btn.classList.add('off');
+            btn.querySelector('span').innerText = "Ulashishni to'xtatish";
+
+            // Ekran uchun alohida yangi PeerJS ob'ekti yaratamiz
+            screenPeer = new Peer(undefined, {
+                host: location.hostname,
+                port: location.port || (location.protocol === 'https:' ? 443 : 80),
+                path: '/peerjs'
+            });
+
+            screenPeer.on('open', (screenId) => {
+                // Serverga xuddi yangi foydalanuvchi kabi ulashgan ekranimizni jo'natamiz
+                socket.emit('join-room', currentRoomId, `${myUsername} (Ekran)`, screenId);
+            });
+
+            // Bizga ekranni ko'rsatish
+            const screenBox = createVideoElement(`${myUsername} (Ekran)`, true);
+            screenBox.id = "my-screen-share";
+            addVideoStream(screenBox, screenStream, null);
+
+            // Foydalanuvchi brauzer panelidan "Ekran bo'lishishni to'xtatish" tugmasini bossa
+            screenStream.getVideoTracks()[0].onended = () => {
+                stopScreenShare();
+            };
+
+        }).catch(err => {
+            console.error("Ekran ulashishda xatolik:", err);
+            alert("Ekran ulashish rad etildi yoki xatolik yuz berdi.");
+        });
+    } else {
+        stopScreenShare();
+    }
+}
+
+function stopScreenShare() {
+    if (!screenSharing) return;
+
+    const btn = document.getElementById('share-btn');
+    
+    // Oqimlarni to'xtatish
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+    }
+
+    // O'zimizdagi ekran oynasini o'chirish
+    const myScreenBox = document.getElementById("my-screen-share");
+    if (myScreenBox) myScreenBox.remove();
+
+    // Ekran Peer ulanishini yo'q qilish
+    if (screenPeer) {
+        screenPeer.destroy();
+    }
+
+    // Serverga ekran uzilganini bildirish
+    socket.emit('leave-screen', currentRoomId);
+
+    screenSharing = false;
+    screenStream = null;
+    btn.classList.remove('off');
+    btn.querySelector('span').innerText = "Ekran ulashish";
+    
+    updateVideoLayout();
+}
+
+// Serverdan ekran o'chirilgani haqida xabar kelsa
+socket.on('screen-disconnected', (screenId) => {
+    const remoteScreenBox = document.getElementById(screenId);
+    if (remoteScreenBox) {
+        remoteScreenBox.remove();
+    }
+    updateVideoLayout();
+});
+
+// ==========================================
 // VIZUAL VA CHAT FUNKSIYALARI
 // ==========================================
 
@@ -247,68 +335,6 @@ function toggleCamera() {
         icon.className = 'fa-solid fa-video';
         span.innerText = "Kamerani o'chirish";
     }
-}
-
-// Ekran ulashish funksiyasi
-function toggleScreenShare() {
-    if (!screenSharing) {
-        navigator.mediaDevices.getDisplayMedia({ video: true }).then(stream => {
-            screenStream = stream;
-            const videoTrack = screenStream.getVideoTracks()[0];
-            
-            // O'z oqimimizdagi video datchikni ekran datchigiga almashtirish
-            const myVideoBox = document.getElementById(socket.id);
-            if (myVideoBox) {
-                myVideoBox.querySelector('video').srcObject = screenStream;
-            }
-
-            // Boshqa ulangan foydalanuvchilarga almashtirilgan video datchikni yuborish
-            for (const socketId in peers) {
-                const peerConnection = peers[socketId].peerConnection;
-                const senders = peerConnection.getSenders();
-                const videoSender = senders.find(sender => sender.track.kind === 'video');
-                if (videoSender) {
-                    videoSender.replaceTrack(videoTrack);
-                }
-            }
-
-            screenSharing = true;
-            document.getElementById('share-btn').classList.add('off');
-
-            // Agar ekran ulashish to'xtatilsa, kamerani qaytarish
-            videoTrack.onended = () => {
-                stopScreenShare();
-            };
-        }).catch(err => {
-            console.error("Ekran ulashib bo'lmadi:", err);
-        });
-    } else {
-        stopScreenShare();
-    }
-}
-
-function stopScreenShare() {
-    if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop());
-    }
-    const cameraTrack = myStream.getVideoTracks()[0];
-    
-    const myVideoBox = document.getElementById(socket.id);
-    if (myVideoBox) {
-        myVideoBox.querySelector('video').srcObject = myStream;
-    }
-
-    for (const socketId in peers) {
-        const peerConnection = peers[socketId].peerConnection;
-        const senders = peerConnection.getSenders();
-        const videoSender = senders.find(sender => sender.track.kind === 'video');
-        if (videoSender) {
-            videoSender.replaceTrack(cameraTrack);
-        }
-    }
-
-    screenSharing = false;
-    document.getElementById('share-btn').classList.remove('off');
 }
 
 // Chat boshqaruvi
