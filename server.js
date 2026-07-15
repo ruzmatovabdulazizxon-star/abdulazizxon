@@ -4,25 +4,21 @@ const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const { ExpressPeerServer } = require('peer');
 const axios = require('axios');
+const path = require('path');
 
 const peerServer = ExpressPeerServer(server, {
     debug: true
 });
 
-app.set('view engine', 'ejs');
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/peerjs', peerServer);
 
-// Xonalarga yo'naltirish
-app.get('/', (req, res) => {
-    res.redirect(`/${require('uuid').v4()}`);
+// Xonaga kiruvchi so'rovlarni bitta index.html ga xavfsiz yo'naltiramiz
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/:room', (req, res) => {
-    res.render('room', { roomId: req.params.room });
-});
-
-// XIRSYS dan TURN/STUN serverlarni olish
+// XIRSYS orqali STUN/TURN serverlarni olish API'si
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
@@ -35,15 +31,15 @@ app.get('/ice-servers', async (req, res) => {
         if (response.data && response.data.v && response.data.v.iceServers) {
             res.json(response.data.v.iceServers);
         } else {
-            res.status(500).json({ error: "ICE serverlarni yuklash imkoni bo'lmadi" });
+            res.status(500).json({ error: "Xirsys serverlari topilmadi" });
         }
     } catch (error) {
         console.error("Xirsys ulanish xatosi:", error.message);
-        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        res.json([{ urls: "stun:stun.l.google.com:19302" }]); // Zaxira variant
     }
 });
 
-// Socket.io ulanish logikasi
+// Soketlar ulanishi
 io.on('connection', socket => {
     socket.on('join-room', (roomId, userId, userName) => {
         socket.join(roomId);
@@ -57,5 +53,5 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server port ${PORT} da muvaffaqiyatli ishga tushdi`);
+    console.log(`Server ${PORT}-portda muvaffaqiyatli ishlamoqda`);
 });
