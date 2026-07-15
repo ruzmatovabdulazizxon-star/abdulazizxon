@@ -2,6 +2,7 @@ const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
 // PeerJS sozlamalari
+// ESKI KOD:
 const peer = new Peer(undefined, {
     host: location.hostname,
     port: location.port || (location.protocol === 'https:' ? 443 : 80),
