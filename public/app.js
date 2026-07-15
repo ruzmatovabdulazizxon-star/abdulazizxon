@@ -31,7 +31,7 @@ let currentPeer = null;
 let isAdmin = false;
 let currentPendingGuest = null;
 let myName = "Foydalanuvchi";
-const peers = {}; // Faol peer ulanishlari ro'yxati
+const peers = {}; 
 
 joinBtn.addEventListener('click', () => {
     myName = usernameInput.value.trim();
@@ -44,23 +44,32 @@ joinBtn.addEventListener('click', () => {
 
     lobby.style.display = 'none';
 
-    // Xirsys TURN/STUN serverlari bilan ulanishni sozlash
+    // Xirsys TURN serverlarini olib, PeerJS konfiguratsiyasiga qo'shamiz
     fetch('/ice-servers')
         .then(res => res.json())
         .then(iceServers => {
+            console.log("Xirsys orqali olingan TURN serverlar:", iceServers);
+            
             currentPeer = new Peer(undefined, {
                 host: location.hostname,
                 port: location.port || (location.protocol === 'https:' ? 443 : 80),
                 path: '/peerjs',
-                config: { iceServers: iceServers }
+                config: { 
+                    iceServers: iceServers, // TURN serverlar shu yerga ulanadi
+                    sdpSemantics: 'unified-plan'
+                }
             });
             startMeetingSetup(currentPeer, roomId, myName);
         })
-        .catch(() => {
+        .catch((err) => {
+            console.error("XIRSYS olishda xato, zaxiraga o'tildi:", err);
             currentPeer = new Peer(undefined, {
                 host: location.hostname,
                 port: location.port || (location.protocol === 'https:' ? 443 : 80),
-                path: '/peerjs'
+                path: '/peerjs',
+                config: {
+                    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+                }
             });
             startMeetingSetup(currentPeer, roomId, myName);
         });
@@ -72,7 +81,6 @@ function startMeetingSetup(peer, roomId, userName) {
         socket.emit('join-room', roomId, id, userName);
     });
 
-    // Admin yoki mehmonga ajratish
     socket.on('admin-status', (status) => {
         isAdmin = status;
         if (isAdmin) {
@@ -84,7 +92,6 @@ function startMeetingSetup(peer, roomId, userName) {
         }
     });
 
-    // Admin uchun kirish so'rovini qabul qilish
     socket.on('join-request-received', (data) => {
         if (isAdmin) {
             currentPendingGuest = data;
@@ -93,16 +100,14 @@ function startMeetingSetup(peer, roomId, userName) {
         }
     });
 
-    // Mehmonga kirish ruxsati berilganda
     socket.on('join-approved', () => {
         waitingScreen.style.display = 'none';
         meetContainer.style.display = 'flex';
         initMediaAndConnections(peer, userName);
     });
 
-    // Mehmon rad etilganda
     socket.on('join-rejected', () => {
-        alert("Kechirasiz, administrator xonaga kirishingizni rad etdi.");
+        alert("Kechirasiz, administrator ruxsat bermadi.");
         location.reload();
     });
 }
@@ -115,7 +120,7 @@ function initMediaAndConnections(peer, userName) {
         myVideoStream = stream;
         addVideoStream('local-user-box', stream, `${userName} (Siz)`, true);
 
-        // Kiruvchi qo'ng'iroqlarga javob berish
+        // Kiruvchi qo'ng'iroqlarga javob berish (TURN server orqali)
         peer.on('call', call => {
             call.answer(stream);
             const video = document.createElement('video');
@@ -126,7 +131,7 @@ function initMediaAndConnections(peer, userName) {
             peers[call.peer] = call;
         });
 
-        // Bizdan avval xonaga kirgan barcha foydalanuvchilarga qo'ng'iroq qilish (Mesh ulanish)
+        // Xonadagi barcha mavjud foydalanuvchilar bilan alohida ulanish ulanadi
         socket.on('all-users', otherUsers => {
             otherUsers.forEach(user => {
                 if (user.userId !== myPeerId) {
@@ -135,17 +140,17 @@ function initMediaAndConnections(peer, userName) {
             });
         });
 
-        // Bizdan keyin qo'shilgan yangi foydalanuvchini ulanishini kutish
+        // Yangi qo'shilgan foydalanuvchini kutish
         socket.on('user-connected', (userId, connectedUserName) => {
             if (userId !== myPeerId) {
                 setTimeout(() => {
                     connectToNewUser(peer, userId, stream, connectedUserName);
-                }, 1000); // 1 soniyalik kechikish ulanish barqarorligini ta'minlaydi
+                }, 1000);
             }
         });
 
     }).catch(err => {
-        alert("Kamera yoki mikrofondan foydalanishda xatolik yuz berdi: " + err);
+        alert("Kamera yoki mikrofondan foydalanishda xatolik: " + err);
     });
 
     socket.on('user-disconnected', userId => {
@@ -158,7 +163,7 @@ function initMediaAndConnections(peer, userName) {
 function connectToNewUser(peer, userId, stream, userName) {
     if (peers[userId]) return;
 
-    // Qo'ng'iroq qilayotganimizda o'z ismimizni metadata ko'rinishida yuboramiz
+    // Qo'ng'iroq qilayotganimizda o'z ismimizni yuborish
     const call = peer.call(userId, stream, { metadata: { callerName: myName } });
     
     call.on('stream', userVideoStream => {
@@ -173,7 +178,6 @@ function connectToNewUser(peer, userId, stream, userName) {
     peers[userId] = call;
 }
 
-// Videoni gridga qo'shish va dublikat bo'lishini tekshirish
 function addVideoStream(boxId, stream, labelText, isLocal) {
     if (document.getElementById(boxId)) return;
 
@@ -197,9 +201,8 @@ function addVideoStream(boxId, stream, labelText, isLocal) {
     videoGrid.append(container);
 }
 
-// ================= Interfeys va Boshqaruv elementlari hodisalari =================
+// ================= Interfeys Boshqaruvi =================
 
-// 1. Mikrofonni yoqish/o'chirish
 micBtn.addEventListener('click', () => {
     const enabled = myVideoStream.getAudioTracks()[0].enabled;
     if (enabled) {
@@ -213,7 +216,6 @@ micBtn.addEventListener('click', () => {
     }
 });
 
-// 2. Kamerani yoqish/o'chirish
 camBtn.addEventListener('click', () => {
     const enabled = myVideoStream.getVideoTracks()[0].enabled;
     if (enabled) {
@@ -227,7 +229,6 @@ camBtn.addEventListener('click', () => {
     }
 });
 
-// 3. Ekran ulashish (Screen Share)
 shareBtn.addEventListener('click', () => {
     if (!screenStream) {
         navigator.mediaDevices.getDisplayMedia({ video: true })
@@ -235,7 +236,6 @@ shareBtn.addEventListener('click', () => {
                 screenStream = stream;
                 let videoTrack = screenStream.getVideoTracks()[0];
 
-                // Barcha faol bog'lanishlarga ekran oqimini almashtirib uzatamiz
                 for (let peerId in peers) {
                     const sender = peers[peerId].peerConnection.getSenders().find(s => s.track.kind === 'video');
                     if (sender) sender.replaceTrack(videoTrack);
@@ -245,11 +245,9 @@ shareBtn.addEventListener('click', () => {
                 if (myLocalVideo) myLocalVideo.srcObject = screenStream;
 
                 shareBtn.classList.add('active');
-
-                // Ekran ulashish to'xtatilgan holat monitoringi
                 videoTrack.onended = () => stopScreenShare();
             })
-            .catch(err => console.error("Ekran ulashib bo'lmadi: " + err));
+            .catch(err => console.error("Ekran ulashib bo'lmadi:", err));
     } else {
         stopScreenShare();
     }
@@ -271,7 +269,6 @@ function stopScreenShare() {
     shareBtn.classList.remove('active');
 }
 
-// 4. Chat oynasini ochish va yopish
 chatBtn.addEventListener('click', () => {
     if (chatPanel.style.display === 'none' || chatPanel.style.display === '') {
         chatPanel.style.display = 'flex';
@@ -282,7 +279,6 @@ chatBtn.addEventListener('click', () => {
     }
 });
 
-// 5. Chat xabarini yuborish logikasi
 sendChatBtn.addEventListener('click', sendMsg);
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendMsg();
@@ -301,10 +297,9 @@ socket.on('receive-chat-message', (message, senderName) => {
     div.className = 'message';
     div.innerHTML = `<div class="sender">${senderName}</div><div>${message}</div>`;
     chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Avtomatik pastga tushirish
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
-// 6. Admin qarori tugmalari
 approveBtn.addEventListener('click', () => {
     if (currentPendingGuest) {
         socket.emit('approve-guest', currentPendingGuest.guestSocketId, currentPendingGuest.guestPeerId, currentPendingGuest.guestName);
@@ -321,9 +316,8 @@ rejectBtn.addEventListener('click', () => {
     }
 });
 
-// 7. Xonadan chiqish
 leaveBtn.addEventListener('click', () => {
-    if (confirm("Haqiqatan ham uchrashuvdan chiqmoqchimisiz?")) {
+    if (confirm("Haqiqatan uchrashuvni tark etmoqchisiz?")) {
         location.reload();
     }
 });
