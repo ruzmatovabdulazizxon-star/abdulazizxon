@@ -6,10 +6,6 @@
     <title>Zoom Professional Platforma</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" defer></script>
     <script src="/socket.io/socket.io.js" defer></script>
-    <script>
-        // Backend'dan kelgan Room ID'ni global o'zgaruvchiga olamiz
-        const ROOM_ID = "<%= roomId %>";
-    </script>
     <script src="app.js" defer></script>
     <style>
         * {
@@ -86,7 +82,7 @@
             background: #27ae60;
         }
 
-        /* Video uchrashuv zonasi (Dastlab yashirin bo'ladi) */
+        /* Video uchrashuv zonasi */
         #meet-container {
             display: none;
             width: 100%;
@@ -113,7 +109,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Oyna effekti */
+            transform: scaleX(-1);
         }
         .name-label {
             position: absolute;
@@ -135,8 +131,8 @@
             <input type="text" id="username-input" placeholder="Ismingizni kiriting..." autocomplete="off">
         </div>
         <div class="input-group">
-            <label>Ulanish xona ID raqami (Ixtiyoriy)</label>
-            <input type="text" id="room-input" placeholder="Suhbatdosh ID raqamini kiriting...">
+            <label>Xona ID raqami (Istalgan so'z yoki raqam)</label>
+            <input type="text" id="room-input" placeholder="Xona nomini kiriting (masalan: 123)..." autocomplete="off">
         </div>
         <button id="join-btn">Uchrashuvni boshlash</button>
     </div>
