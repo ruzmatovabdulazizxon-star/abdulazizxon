@@ -1,14 +1,15 @@
 {
-  "name": "zoom-mini-platform",
+  "name": "zoom-loyiha",
   "version": "1.0.0",
-  "description": "Video conferencing application",
+  "description": "Zoom clone loyihasi",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "peer": "^1.0.2",
-    "socket.io": "^4.7.5"
+    "axios": "^1.6.0",
+    "express": "^4.18.2",
+    "peer": "^1.0.1",
+    "socket.io": "^4.7.2"
   }
 }
