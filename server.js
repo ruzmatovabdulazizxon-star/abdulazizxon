@@ -3,7 +3,7 @@ const app = express();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const { ExpressPeerServer } = require('peer');
-const axios = require('axios'); // Faqat bir marta e'lon qilindi!
+const axios = require('axios'); // Bir marta to'g'ri e'lon qilindi
 
 const peerServer = ExpressPeerServer(server, {
     debug: true
@@ -13,7 +13,7 @@ app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use('/peerjs', peerServer);
 
-// Xonaga kirish
+// Xonalarni boshqarish marshrutlari
 app.get('/', (req, res) => {
     res.redirect(`/${require('uuid').v4()}`);
 });
@@ -22,12 +22,12 @@ app.get('/:room', (req, res) => {
     res.render('room', { roomId: req.params.room });
 });
 
-// XIRSYS dan dynamic ICE serverlarni olish
+// XIRSYS dynamic TURN/STUN serverlarini olish API
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
-                // "ident:secret" -> Base64 formatda
+                // "ident:secret" -> Base64 formatga o'tkazish
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
@@ -45,11 +45,12 @@ app.get('/ice-servers', async (req, res) => {
     }
 });
 
-// Socket.io ulanishlari
+// Socket.io ulanishi va xonaga qo'shilish logikasi
 io.on('connection', socket => {
-    socket.on('join-room', (roomId, userId) => {
+    socket.on('join-room', (roomId, userId, userName) => {
         socket.join(roomId);
-        socket.to(roomId).emit('user-connected', userId);
+        // Yangi foydalanuvchi ulandingi haqida xabar yuborish
+        socket.to(roomId).emit('user-connected', userId, userName);
 
         socket.on('disconnect', () => {
             socket.to(roomId).emit('user-disconnected', userId);
@@ -59,5 +60,5 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server portda ishlamoqda: ${PORT}`);
+    console.log(`Server running on port: ${PORT}`);
 });
