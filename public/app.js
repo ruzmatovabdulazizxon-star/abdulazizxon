@@ -1,68 +1,93 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
-const peers = {};
+const lobby = document.getElementById('lobby');
+const meetContainer = document.getElementById('meet-container');
+const joinBtn = document.getElementById('join-btn');
+const usernameInput = document.getElementById('username-input');
+const roomInput = document.getElementById('room-input');
 
+const peers = {};
 let myVideoStream;
 const myVideo = document.createElement('video');
 myVideo.muted = true;
 
-// Ismni olish (agar sizda kirish oynasidan olinadigan bo'lsa, o'shani oling, aks holda prompt orqali so'raymiz)
-const myName = typeof USER_NAME !== 'undefined' ? USER_NAME : prompt("Ismingizni kiriting:") || "Mehmon";
+// Uchrashuvni boshlash tugmasi bosilganda ishlaydi
+joinBtn.addEventListener('click', () => {
+    const userName = usernameInput.value.trim();
+    if (!userName) {
+        alert("Iltimos, avval ismingizni kiriting!");
+        return;
+    }
 
-// Serverimizdan shaxsiy Xirsys TURN/STUN serverlarimizni olamiz
-fetch('/ice-servers')
-    .then(res => res.json())
-    .then(iceServers => {
-        // PeerJS dynamic olingan serverlar ro'yxati bilan ishga tushadi
-        const peer = new Peer(undefined, {
-            host: location.hostname,
-            port: location.port || (location.protocol === 'https:' ? 443 : 80),
-            path: '/peerjs',
-            config: {
-                iceServers: iceServers // Dynamic olingan serverlar
-            }
+    // Agar foydalanuvchi boshqa xona ID kiritgan bo'lsa, o'sha xonaga yo'naltiramiz
+    const targetRoom = roomInput.value.trim();
+    if (targetRoom && targetRoom !== ROOM_ID) {
+        window.location.href = `/${targetRoom}`;
+        return;
+    }
+
+    // Kirish oynasini yashiramiz va video ekranni ko'rsatamiz
+    lobby.style.display = 'none';
+    meetContainer.style.display = 'flex';
+
+    // Xirsys'dan dynamic ICE serverlarni so'raymiz
+    fetch('/ice-servers')
+        .then(res => res.json())
+        .then(iceServers => {
+            const peer = new Peer(undefined, {
+                host: location.hostname,
+                port: location.port || (location.protocol === 'https:' ? 443 : 80),
+                path: '/peerjs',
+                config: {
+                    iceServers: iceServers
+                }
+            });
+
+            startApplication(peer, userName);
+        })
+        .catch(err => {
+            console.error("TURN serverlarni olishda xatolik:", err);
+            // Muammo bo'lsa zaxira varianti bilan ishga tushuramiz
+            const peer = new Peer(undefined, {
+                host: location.hostname,
+                port: location.port || (location.protocol === 'https:' ? 443 : 80),
+                path: '/peerjs'
+            });
+            startApplication(peer, userName);
         });
-
-        startApplication(peer);
-    })
-    .catch(err => {
-        console.error("Xirsys ICE serverlarini yuklashda xato:", err);
-    });
+});
 
 // Asosiy dastur logikasi
-function startApplication(peer) {
+function startApplication(peer, userName) {
     navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
     }).then(stream => {
         myVideoStream = stream;
-        addVideoStream(myVideo, stream, peer.id, myName);
+        addVideoStream(myVideo, stream, peer.id, userName);
 
-        // Kiruvchi qo'ng'iroqlarga javob berish
+        // Qo'ng'iroqlarga javob berish
         peer.on('call', call => {
             call.answer(stream);
             const video = document.createElement('video');
-            
             call.on('stream', userVideoStream => {
-                // Ikkinchi odamning ismini server orqali aniqlab olish mumkin
-                addVideoStream(video, userVideoStream, call.peer, "Ulanuvchi");
+                addVideoStream(video, userVideoStream, call.peer, "Suhbatdosh");
             });
-
             call.on('close', () => {
                 video.remove();
             });
-
             peers[call.peer] = call;
         });
 
-        // Yangi foydalanuvchi ulanganda
-        socket.on('user-connected', (userId, userName) => {
+        // Yangi foydalanuvchi ulanganda unga qo'ng'iroq qilish
+        socket.on('user-connected', (userId, connectedUserName) => {
             setTimeout(() => {
-                connectToNewUser(peer, userId, stream, userName);
+                connectToNewUser(peer, userId, stream, connectedUserName);
             }, 1000);
         });
     }).catch(err => {
-        console.error("Kamera va mikrofonga ruxsat berilmadi:", err);
+        console.error("Kamera yoki mikrofondan foydalanish ruxsat etilmadi:", err);
+        alert("Kamera va mikrofonga ruxsat berishingiz zarur!");
     });
 
     socket.on('user-disconnected', userId => {
@@ -70,13 +95,11 @@ function startApplication(peer) {
             peers[userId].close();
         }
         const extraVideo = document.getElementById(userId);
-        if (extraVideo) {
-            extraVideo.parentElement.remove(); // Video konteynerini o'chirish
-        }
+        if (extraVideo) extraVideo.remove();
     });
 
     peer.on('open', id => {
-        socket.emit('join-room', ROOM_ID, id, myName);
+        socket.emit('join-room', ROOM_ID, id, userName);
     });
 }
 
@@ -97,7 +120,6 @@ function connectToNewUser(peer, userId, stream, userName) {
     peers[userId] = call;
 }
 
-// Videoni ekranga chiqarish va tagiga ismini yozish funksiyasi
 function addVideoStream(video, stream, userId, userName) {
     if (userId && document.getElementById(userId)) return;
 
@@ -111,7 +133,7 @@ function addVideoStream(video, stream, userId, userName) {
 
     video.srcObject = stream;
     video.addEventListener('loadedmetadata', () => {
-        video.play().catch(err => console.error("Video ijro xatosi:", err));
+        video.play().catch(err => console.error("Video ijrosida xato:", err));
     });
 
     container.append(video);
