@@ -13,28 +13,32 @@ const peerServer = ExpressPeerServer(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/peerjs', peerServer);
 
-// Xonalardagi foydalanuvchilar va adminlarni boshqarish ob'ektlari
+// Xonalardagi foydalanuvchilar va adminlarni boshqarish
 const roomsAdmin = {}; // { roomId: adminSocketId }
 const roomsUsers = {}; // { roomId: [ { userId, socketId, userName } ] }
 
-// Barcha sahifa so'rovlarini bitta index.html ga yo'naltiramiz
+// Barcha sahifa so'rovlarini bitta index.html ga yo'naltirish
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// XIRSYS orqali TURN/STUN serverlarni olish
+// XIRSYS dan TURN/STUN serverlarni olish (Sizning profilingiz bo'yicha)
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
+                // "ident:secret" -> Base64 kodlash
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
         });
+        
         if (response.data && response.data.v && response.data.v.iceServers) {
+            console.log("Xirsys TURN serverlari muvaffaqiyatli olindi!");
             res.json(response.data.v.iceServers);
         } else {
-            res.status(500).json({ error: "Xirsys serverlari topilmadi" });
+            console.warn("Xirsys javobi noto'g'ri formatda, zaxiraga o'tiladi.");
+            res.json([{ urls: "stun:stun.l.google.com:19302" }]);
         }
     } catch (error) {
         console.error("Xirsys ulanish xatosi:", error.message);
@@ -46,7 +50,7 @@ app.get('/ice-servers', async (req, res) => {
 io.on('connection', socket => {
     socket.on('join-room', (roomId, userId, userName) => {
         
-        // 1. Adminlik maqomini tekshirish
+        // Adminlik maqomini tekshirish
         if (!roomsAdmin[roomId]) {
             roomsAdmin[roomId] = socket.id;
             socket.emit('admin-status', true);
@@ -56,7 +60,7 @@ io.on('connection', socket => {
 
         socket.join(roomId);
 
-        // 2. Kutish xonasidan kirishga ruxsat so'rash
+        // Kutish xonasidan kirishga ruxsat so'rash
         socket.on('request-join', () => {
             const adminSocketId = roomsAdmin[roomId];
             if (adminSocketId) {
@@ -66,19 +70,18 @@ io.on('connection', socket => {
                     guestName: userName
                 });
             } else {
-                // Agar admin tasodifan chiqib ketgan bo'lsa, to'g'ridan-to'g'ri ruxsat beriladi
                 socket.emit('join-approved');
                 registerUserAndNotify(roomId, userId, socket.id, userName);
             }
         });
 
-        // 3. Admin ruxsat berganida foydalanuvchini xonaga qo'shish
+        // Admin ruxsat berganida
         socket.on('approve-guest', (guestSocketId, guestPeerId, guestName) => {
             io.to(guestSocketId).emit('join-approved');
             registerUserAndNotify(roomId, guestPeerId, guestSocketId, guestName);
         });
 
-        // 4. Admin rad etganida
+        // Admin rad etganida
         socket.on('reject-guest', (guestSocketId) => {
             io.to(guestSocketId).emit('join-rejected');
         });
@@ -88,7 +91,7 @@ io.on('connection', socket => {
             io.to(roomId).emit('receive-chat-message', message, senderName);
         });
 
-        // Foydalanuvchi ulanishni uzganda (chiqib ketganda)
+        // Chiqib ketish logikasi
         socket.on('disconnect', () => {
             if (roomsUsers[roomId]) {
                 roomsUsers[roomId] = roomsUsers[roomId].filter(user => user.socketId !== socket.id);
@@ -101,27 +104,25 @@ io.on('connection', socket => {
     });
 });
 
-// Foydalanuvchini ro'yxatga olish va ulanish signallarini tarqatish funksiyasi
 function registerUserAndNotify(roomId, userId, socketId, userName) {
     if (!roomsUsers[roomId]) {
         roomsUsers[roomId] = [];
     }
     
-    // Foydalanuvchi takroran qo'shilmasligini tekshiramiz
     if (!roomsUsers[roomId].some(u => u.userId === userId)) {
         roomsUsers[roomId].push({ userId, socketId, userName });
     }
 
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
-        // Yangi kirgan foydalanuvchiga xonada mavjud bo'lgan boshqa barcha ishtirokchilar ro'yxatini yuboramiz
+        // Yangi odamga xonadagi hamma eski foydalanuvchilar ro'yxati beriladi
         const otherUsers = roomsUsers[roomId].filter(u => u.userId !== userId);
         socket.emit('all-users', otherUsers);
 
-        // Eski foydalanuvchilarga yangi odam kelgani haqida xabar beramiz
+        // Eskilarga esa yangi foydalanuvchi ulangani bildiriladi
         socket.to(roomId).emit('user-connected', userId, userName);
     }
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server ${PORT}-portda ishlamoqda.`));
