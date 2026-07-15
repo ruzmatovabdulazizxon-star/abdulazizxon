@@ -1,45 +1,101 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
+const peers = {};
 
-// PeerJS ulanishi (Sizning shaxsiy Metered TURN serveringiz bilan)
-const peer = new Peer(undefined, {
-    host: location.hostname,
-    port: location.port || (location.protocol === 'https:' ? 443 : 80),
-    path: '/peerjs',
-    config: {
-        iceServers: [
-            // Standart Google STUN serverlari
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            
-            // Metered.ca STUN serveri
-            {
-                urls: "stun:stun.relay.metered.ca:80",
-            },
-            // Metered.ca TURN serverlari (Sizning shaxsiy ma'lumotlaringiz)
-            {
-                urls: "turn:global.relay.metered.ca:80",
-                username: "00f1f541e45ccb92ba89ea0d",
-                credential: "6w6sm5Qc9+f2HmmS",
-            },
-            {
-                urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                username: "00f1f541e45ccb92ba89ea0d",
-                credential: "6w6sm5Qc9+f2HmmS",
-            },
-            {
-                urls: "turn:global.relay.metered.ca:443",
-                username: "00f1f541e45ccb92ba89ea0d",
-                credential: "6w6sm5Qc9+f2HmmS",
-            },
-            {
-                urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                username: "00f1f541e45ccb92ba89ea0d",
-                credential: "6w6sm5Qc9+f2HmmS",
+let myVideoStream;
+const myVideo = document.createElement('video');
+myVideo.muted = true;
+
+// Serverdan shaxsiy Xirsys ICE serverlarimizni so'rab olamiz
+fetch('/ice-servers')
+    .then(res => res.json())
+    .then(iceServers => {
+        // PeerJS ulanishini dinamik olingan serverlar bilan yaratamiz
+        const peer = new Peer(undefined, {
+            host: location.hostname,
+            port: location.port || (location.protocol === 'https:' ? 443 : 80),
+            path: '/peerjs',
+            config: {
+                iceServers: iceServers // Xirsys taqdim etgan bepul 60GB gacha TURN/STUN manzillar
             }
-        ]
-    }
-});
+        });
+
+        startApplication(peer);
+    });
+
+// Butun dastur logikasini o'rab turuvchi asosiy funksiya
+function startApplication(peer) {
+    navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+    }).then(stream => {
+        myVideoStream = stream;
+        addVideoStream(myVideo, stream, peer.id);
+
+        peer.on('call', call => {
+            call.answer(stream);
+            const video = document.createElement('video');
+            
+            call.on('stream', userVideoStream => {
+                addVideoStream(video, userVideoStream, call.peer);
+            });
+
+            call.on('close', () => {
+                video.remove();
+            });
+
+            peers[call.peer] = call;
+        });
+
+        socket.on('user-connected', userId => {
+            setTimeout(() => {
+                connectToNewUser(peer, userId, stream);
+            }, 1000);
+        });
+    });
+
+    socket.on('user-disconnected', userId => {
+        if (peers[userId]) {
+            peers[userId].close();
+        }
+        const extraVideo = document.getElementById(userId);
+        if (extraVideo) extraVideo.remove();
+    });
+
+    peer.on('open', id => {
+        socket.emit('join-room', ROOM_ID, id);
+    });
+}
+
+function connectToNewUser(peer, userId, stream) {
+    if (peers[userId]) return;
+
+    const call = peer.call(userId, stream);
+    const video = document.createElement('video');
+
+    call.on('stream', userVideoStream => {
+        addVideoStream(video, userVideoStream, userId);
+    });
+
+    call.on('close', () => {
+        video.remove();
+    });
+
+    peers[userId] = call;
+}
+
+function addVideoStream(video, stream, userId) {
+    if (userId && document.getElementById(userId)) return;
+
+    video.srcObject = stream;
+    if (userId) video.id = userId;
+    
+    video.addEventListener('loadedmetadata', () => {
+        video.play().catch(err => console.error("Video ijrosida xato:", err));
+    });
+
+    videoGrid.append(video);
+}
 
 let myStream;
 let myPeerId;
