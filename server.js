@@ -94,3 +94,30 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
     console.log(`Server ${PORT}-portda muvaffaqiyatli ishga tushdi.`);
 });
+const axios = require('axios'); // Agar axios o'rnatilmagan bo'lsa: npm install axios
+
+app.get('/ice-servers', async (req, res) => {
+    try {
+        // XIRSYS API dan token va xizmatlar so'rash
+        const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
+            headers: {
+                // Xirsys profilingizdagi ma'lumotlar:
+                // Format -> "Sizning_Xirsys_Username:Sizning_API_Token"
+                // Username rasmda o'ng burchakda turibdi: abdulaziz
+                "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
+                "Content-Type": "application/json"
+            }
+        });
+        
+        // Agar so'rov muvaffaqiyatli bo'lsa, ICE serverlarni qaytaramiz
+        if (response.data && response.data.v && response.data.v.iceServers) {
+            res.json(response.data.v.iceServers);
+        } else {
+            res.status(500).json({ error: "ICE serverlarni olib bo'lmadi" });
+        }
+    } catch (error) {
+        console.error("Xirsys ulanish xatosi:", error.message);
+        // Agar xatolik bo'lsa, zaxira sifatida bepul STUN serverni qaytaramiz
+        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+    }
+});
