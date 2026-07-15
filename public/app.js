@@ -2,11 +2,34 @@ const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
 // PeerJS sozlamalari
-// ESKI KOD:
+// YANGI KOD (STUN serverlar integratsiyasi bilan):
 const peer = new Peer(undefined, {
     host: location.hostname,
     port: location.port || (location.protocol === 'https:' ? 443 : 80),
-    path: '/peerjs'
+    path: '/peerjs',
+    config: {
+        iceServers: [
+            // Google bepul STUN serverlari (NAT ortidagi qurilmalarni IP-manzilini aniqlash uchun)
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            
+            // Ayrim juda qattiq cheklangan mobil tarmoqlar (masalan, Ucell, Beeline, Uztelecom) uchun 
+            // quyida bepul ochiq TURN server (OpenRelay proekti) qo'shilgan:
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
+        ]
+    }
 });
 
 let myStream;
