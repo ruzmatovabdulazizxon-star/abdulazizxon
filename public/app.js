@@ -11,26 +11,24 @@ let myVideoStream;
 const myVideo = document.createElement('video');
 myVideo.muted = true;
 
-// Uchrashuvni boshlash tugmasi bosilganda ishlaydi
 joinBtn.addEventListener('click', () => {
     const userName = usernameInput.value.trim();
+    const roomId = roomInput.value.trim();
+
     if (!userName) {
-        alert("Iltimos, avval ismingizni kiriting!");
+        alert("Iltimos, ismingizni kiriting!");
+        return;
+    }
+    if (!roomId) {
+        alert("Iltimos, xona nomini yoki ID raqamini kiriting!");
         return;
     }
 
-    // Agar foydalanuvchi boshqa xona ID kiritgan bo'lsa, o'sha xonaga yo'naltiramiz
-    const targetRoom = roomInput.value.trim();
-    if (targetRoom && targetRoom !== ROOM_ID) {
-        window.location.href = `/${targetRoom}`;
-        return;
-    }
-
-    // Kirish oynasini yashiramiz va video ekranni ko'rsatamiz
+    // Ekranlarni almashtiramiz
     lobby.style.display = 'none';
     meetContainer.style.display = 'flex';
 
-    // Xirsys'dan dynamic ICE serverlarni so'raymiz
+    // Xirsys TURN/STUN serverlarini olish
     fetch('/ice-servers')
         .then(res => res.json())
         .then(iceServers => {
@@ -43,22 +41,20 @@ joinBtn.addEventListener('click', () => {
                 }
             });
 
-            startApplication(peer, userName);
+            startApplication(peer, roomId, userName);
         })
         .catch(err => {
-            console.error("TURN serverlarni olishda xatolik:", err);
-            // Muammo bo'lsa zaxira varianti bilan ishga tushuramiz
+            console.error("ICE serverlarni olishda xatolik, standart ulanishga o'tilmoqda:", err);
             const peer = new Peer(undefined, {
                 host: location.hostname,
                 port: location.port || (location.protocol === 'https:' ? 443 : 80),
                 path: '/peerjs'
             });
-            startApplication(peer, userName);
+            startApplication(peer, roomId, userName);
         });
 });
 
-// Asosiy dastur logikasi
-function startApplication(peer, userName) {
+function startApplication(peer, roomId, userName) {
     navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
@@ -79,15 +75,15 @@ function startApplication(peer, userName) {
             peers[call.peer] = call;
         });
 
-        // Yangi foydalanuvchi ulanganda unga qo'ng'iroq qilish
+        // Yangi ulanuvchilar bilan bog'lanish
         socket.on('user-connected', (userId, connectedUserName) => {
             setTimeout(() => {
                 connectToNewUser(peer, userId, stream, connectedUserName);
             }, 1000);
         });
     }).catch(err => {
-        console.error("Kamera yoki mikrofondan foydalanish ruxsat etilmadi:", err);
-        alert("Kamera va mikrofonga ruxsat berishingiz zarur!");
+        console.error("Kamera xatosi:", err);
+        alert("Kamera yoki mikrofonga ruxsat bering!");
     });
 
     socket.on('user-disconnected', userId => {
@@ -99,7 +95,7 @@ function startApplication(peer, userName) {
     });
 
     peer.on('open', id => {
-        socket.emit('join-room', ROOM_ID, id, userName);
+        socket.emit('join-room', roomId, id, userName);
     });
 }
 
@@ -133,7 +129,7 @@ function addVideoStream(video, stream, userId, userName) {
 
     video.srcObject = stream;
     video.addEventListener('loadedmetadata', () => {
-        video.play().catch(err => console.error("Video ijrosida xato:", err));
+        video.play().catch(err => console.error("Ijroda xatolik:", err));
     });
 
     container.append(video);
