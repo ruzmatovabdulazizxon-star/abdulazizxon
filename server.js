@@ -13,12 +13,12 @@ const peerServer = ExpressPeerServer(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/peerjs', peerServer);
 
-// Xonalardagi adminlarni saqlash uchun ob'ekt
-const roomsAdmin = {}; 
-
+// Har qanday URL'ni bitta index.html ga xavfsiz yo'naltiramiz
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+const roomsAdmin = {}; // Xonadagi adminlar: { roomId: socketId }
 
 // XIRSYS dan TURN/STUN serverlarni olish
 app.get('/ice-servers', async (req, res) => {
@@ -29,64 +29,62 @@ app.get('/ice-servers', async (req, res) => {
                 "Content-Type": "application/json"
             }
         });
-        
         if (response.data && response.data.v && response.data.v.iceServers) {
             res.json(response.data.v.iceServers);
         } else {
-            res.status(500).json({ error: "Xirsys serverlari topilmadi" });
+            res.status(500).json({ error: "No ICE servers" });
         }
     } catch (error) {
-        console.error("Xirsys ulanish xatosi:", error.message);
         res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
 
-// Soketlar ulanishi
 io.on('connection', socket => {
     socket.on('join-room', (roomId, userId, userName) => {
-        // Agar bu xonada hali admin bo'lmasa, birinchi kirgan odam admin bo'ladi
+        // Birinchi kirgan foydalanuvchini admin qilamiz
         if (!roomsAdmin[roomId]) {
             roomsAdmin[roomId] = socket.id;
-            socket.emit('admin-status', true); // Adminga signal yuboramiz
+            socket.emit('admin-status', true);
         } else {
-            socket.emit('admin-status', false); // Oddiy mehmonga signal
+            socket.emit('admin-status', false);
         }
 
         socket.join(roomId);
 
-        // Yangi kelgan mehmon admindan ruxsat so'raydi
+        // Yangi kirgan foydalanuvchi admindan ruxsat so'raydi
         socket.on('request-join', () => {
             const adminSocketId = roomsAdmin[roomId];
             if (adminSocketId) {
-                // Faqat adminga "falonchi kirmoqchi" deb xabar yuboramiz
                 io.to(adminSocketId).emit('join-request-received', {
                     guestSocketId: socket.id,
                     guestPeerId: userId,
                     guestName: userName
                 });
             } else {
-                // Agar tasodifan admin chiqib ketgan bo'lsa, to'g'ridan-to'g'ri kiritamiz
                 socket.emit('join-approved');
                 socket.to(roomId).emit('user-connected', userId, userName);
             }
         });
 
-        // Admin ruxsat berganda
+        // Admin mehmonni qabul qilganda
         socket.on('approve-guest', (guestSocketId, guestPeerId, guestName) => {
             io.to(guestSocketId).emit('join-approved');
-            // Xonadagi barcha foydalanuvchilarga yangi mehmon qo'shilganini bildiramiz
             socket.to(roomId).emit('user-connected', guestPeerId, guestName);
         });
 
-        // Admin rad etganda
+        // Admin mehmonni rad etganda
         socket.on('reject-guest', (guestSocketId) => {
             io.to(guestSocketId).emit('join-rejected');
+        });
+
+        // Chat xabarlarini yuborish
+        socket.on('send-chat-message', (message, senderName) => {
+            io.to(roomId).emit('receive-chat-message', message, senderName);
         });
 
         // Foydalanuvchi chiqib ketganda
         socket.on('disconnect', () => {
             socket.to(roomId).emit('user-disconnected', userId);
-            // Agar admin chiqib ketgan bo'lsa, adminlikni tozalaymiz
             if (roomsAdmin[roomId] === socket.id) {
                 delete roomsAdmin[roomId];
             }
@@ -95,6 +93,4 @@ io.on('connection', socket => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port: ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
