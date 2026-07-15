@@ -3,29 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Professional Platforma</title>
+    <title>Zoom Professional</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" defer></script>
     <script src="/socket.io/socket.io.js" defer></script>
     <script src="app.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: #0f1011;
             color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
         }
-        
-        /* Kirish oynasi (Lobby) */
+
+        /* Kirish (Lobby) */
         #lobby {
             background: #1c1e21;
             padding: 30px;
@@ -36,106 +32,61 @@
             text-align: center;
             z-index: 10;
         }
-        #lobby h2 {
-            margin-bottom: 20px;
-            font-size: 20px;
-            color: #f1f1f1;
-        }
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        .input-group label {
-            display: block;
-            font-size: 11px;
-            color: #a0a0a0;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        .input-group input {
-            width: 100%;
-            padding: 12px;
-            background: #2d3135;
-            border: 1px solid #3e444a;
-            border-radius: 6px;
-            color: white;
-            font-size: 14px;
-            outline: none;
-        }
-        .input-group input:focus {
-            border-color: #2ecc71;
-        }
-        #join-btn {
-            width: 100%;
-            padding: 12px;
-            background: #2ecc71;
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-size: 15px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        #join-btn:hover {
-            background: #27ae60;
-        }
+        #lobby h2 { margin-bottom: 20px; font-size: 20px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-size: 11px; color: #a0a0a0; text-transform: uppercase; margin-bottom: 5px; }
+        .input-group input { width: 100%; padding: 12px; background: #2d3135; border: 1px solid #3e444a; border-radius: 6px; color: white; outline: none; }
+        #join-btn { width: 100%; padding: 12px; background: #2ecc71; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
 
-        /* Kutish xonasi xabari (Waiting Screen) */
+        /* Kutish xonasi */
         #waiting-screen {
             display: none;
             text-align: center;
             background: #1c1e21;
             padding: 40px;
             border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
             max-width: 400px;
         }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #2ecc71;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
 
-        /* Video uchrashuv zonasi */
+        /* Asosiy Video Zona */
         #meet-container {
             display: none;
-            width: 100%;
+            width: 100vw;
             height: 100vh;
+            flex-direction: row;
+            position: relative;
+        }
+
+        #main-area {
+            flex: 1;
+            display: flex;
             flex-direction: column;
             position: relative;
         }
+
         #video-grid {
             flex: 1;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 15px;
             padding: 20px;
-            background: #0f1011;
+            background: #141517;
             overflow-y: auto;
+            align-content: center;
         }
+
         .video-box {
             position: relative;
             background: #232427;
-            border-radius: 8px;
+            border-radius: 10px;
             overflow: hidden;
             aspect-ratio: 16/9;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .local-video { transform: scaleX(-1); } /* O'zini ko'zgudek ko'rish */
+
         .name-label {
             position: absolute;
             bottom: 10px;
@@ -146,7 +97,57 @@
             font-size: 12px;
         }
 
-        /* Adminga chiqadigan Ruxsat berish bildirishnomasi */
+        /* Pastki boshqaruv paneli */
+        #control-bar {
+            height: 80px;
+            background: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 0 20px;
+            border-top: 1px solid #2d3135;
+        }
+
+        .control-btn {
+            background: #2d3135;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover { background: #3e444a; }
+        .control-btn.active { background: #e74c3c; } /* O'chirilgan holat rangi */
+        .leave-btn { background: #e74c3c; border-radius: 8px; width: auto; padding: 0 20px; font-weight: bold; }
+        .leave-btn:hover { background: #c0392b; }
+
+        /* O'ng tarafdagi Chat paneli */
+        #chat-panel {
+            width: 320px;
+            background: #1c1e21;
+            border-left: 1px solid #2d3135;
+            display: none;
+            flex-direction: column;
+        }
+
+        .chat-header { padding: 15px; border-bottom: 1px solid #2d3135; font-weight: bold; }
+        #chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .message { background: #2d3135; padding: 8px 12px; border-radius: 8px; max-width: 85%; font-size: 14px; }
+        .message .sender { font-size: 11px; color: #2ecc71; margin-bottom: 3px; font-weight: bold; }
+        
+        .chat-input-area { padding: 15px; display: flex; gap: 10px; border-top: 1px solid #2d3135; }
+        #chat-input { flex: 1; padding: 10px; background: #2d3135; border: none; border-radius: 6px; color: white; outline: none; }
+        #send-chat-btn { background: #2ecc71; border: none; color: white; padding: 10px 15px; border-radius: 6px; cursor: pointer; }
+
+        /* Admin ruxsat berish bildirishnomasi */
         #admin-notification {
             display: none;
             position: absolute;
@@ -160,73 +161,60 @@
             z-index: 100;
             width: 300px;
         }
-        #admin-notification p {
-            margin-bottom: 15px;
-            font-size: 14px;
-        }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-        }
-        .approve-btn {
-            flex: 1;
-            background: #2ecc71;
-            border: none;
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .reject-btn {
-            flex: 1;
-            background: #e74c3c;
-            border: none;
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .approve-btn { flex: 1; background: #2ecc71; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .reject-btn { flex: 1; background: #e74c3c; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <!-- 1. Kirish oynasi (Lobby) -->
     <div id="lobby">
-        <h2>Zoom Mini-Platformasiga kirish</h2>
+        <h2>Zoom Professional kirish</h2>
         <div class="input-group">
             <label>Ismingiz</label>
-            <input type="text" id="username-input" placeholder="Ismingizni kiriting..." autocomplete="off">
+            <input type="text" id="username-input" placeholder="Ismingizni kiriting...">
         </div>
         <div class="input-group">
             <label>Xona ID raqami</label>
-            <input type="text" id="room-input" placeholder="Xona nomini kiriting..." autocomplete="off">
+            <input type="text" id="room-input" placeholder="Xona nomini kiriting...">
         </div>
         <button id="join-btn">Uchrashuvni boshlash</button>
     </div>
 
-    <!-- 2. Kutish oynasi (Faqat mehmonlar uchun) -->
     <div id="waiting-screen">
         <h3>Ulanish kutilmoqda...</h3>
-        <p style="color: #a0a0a0; margin-top: 10px; font-size: 14px;">
-            Loyiha admini ruxsat berishini kuting.
-        </p>
-        <div class="loader"></div>
+        <p style="color: #a0a0a0; margin-top: 10px;">Loyiha admini ruxsat berishini kuting.</p>
     </div>
 
-    <!-- 3. Video uchrashuv zonasi -->
     <div id="meet-container">
-        <!-- Admin uchun bildirishnoma paneli -->
         <div id="admin-notification">
-            <p id="notification-text">Mehmon kirishga ruxsat so'ramoqda...</p>
+            <p id="notification-text">Suhbatdosh kirishga ruxsat so'ramoqda...</p>
             <div class="btn-group">
                 <button class="approve-btn" id="approve-btn">Ruxsat berish</button>
                 <button class="reject-btn" id="reject-btn">Rad etish</button>
             </div>
         </div>
 
-        <div id="video-grid"></div>
+        <div id="main-area">
+            <div id="video-grid"></div>
+
+            <div id="control-bar">
+                <button class="control-btn" id="mic-btn" title="Mikrofon"><i class="fa fa-microphone"></i></button>
+                <button class="control-btn" id="cam-btn" title="Kamera"><i class="fa fa-video"></i></button>
+                <button class="control-btn" id="share-btn" title="Ekran ulashish"><i class="fa fa-desktop"></i></button>
+                <button class="control-btn" id="chat-btn" title="Chat"><i class="fa fa-comment"></i></button>
+                <button class="control-btn leave-btn" id="leave-btn"><i class="fa fa-sign-out-alt"></i> Chiqish</button>
+            </div>
+        </div>
+
+        <div id="chat-panel">
+            <div class="chat-header">Xona Chati</div>
+            <div id="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Xabar yozing..." autocomplete="off">
+                <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
+            </div>
+        </div>
     </div>
 
 </body>
