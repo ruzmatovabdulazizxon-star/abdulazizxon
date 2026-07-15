@@ -96,20 +96,19 @@ server.listen(PORT, () => {
 });
 const axios = require('axios'); // Agar axios o'rnatilmagan bo'lsa: npm install axios
 
+
 app.get('/ice-servers', async (req, res) => {
     try {
-        // XIRSYS API dan token va xizmatlar so'rash
+        // Xirsys API ga so'rov yuborish
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
-                // Xirsys profilingizdagi ma'lumotlar:
-                // Format -> "Sizning_Xirsys_Username:Sizning_API_Token"
-                // Username rasmda o'ng burchakda turibdi: abdulaziz
+                // "ident:secret" ko'rinishidagi ma'lumotni Base64 formatga o'tkazamiz
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
         });
-        
-        // Agar so'rov muvaffaqiyatli bo'lsa, ICE serverlarni qaytaramiz
+
+        // Kelgan ICE serverlar ro'yxatini front-endga uzatamiz
         if (response.data && response.data.v && response.data.v.iceServers) {
             res.json(response.data.v.iceServers);
         } else {
@@ -121,3 +120,4 @@ app.get('/ice-servers', async (req, res) => {
         res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
+const axios = require('axios');
