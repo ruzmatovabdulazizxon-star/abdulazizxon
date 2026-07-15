@@ -82,12 +82,37 @@
             background: #27ae60;
         }
 
+        /* Kutish xonasi xabari (Waiting Screen) */
+        #waiting-screen {
+            display: none;
+            text-align: center;
+            background: #1c1e21;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            max-width: 400px;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2ecc71;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         /* Video uchrashuv zonasi */
         #meet-container {
             display: none;
             width: 100%;
             height: 100vh;
             flex-direction: column;
+            position: relative;
         }
         #video-grid {
             flex: 1;
@@ -120,10 +145,54 @@
             border-radius: 4px;
             font-size: 12px;
         }
+
+        /* Adminga chiqadigan Ruxsat berish bildirishnomasi */
+        #admin-notification {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #2d3135;
+            border: 2px solid #2ecc71;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 100;
+            width: 300px;
+        }
+        #admin-notification p {
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        .approve-btn {
+            flex: 1;
+            background: #2ecc71;
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .reject-btn {
+            flex: 1;
+            background: #e74c3c;
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
+    <!-- 1. Kirish oynasi (Lobby) -->
     <div id="lobby">
         <h2>Zoom Mini-Platformasiga kirish</h2>
         <div class="input-group">
@@ -131,13 +200,32 @@
             <input type="text" id="username-input" placeholder="Ismingizni kiriting..." autocomplete="off">
         </div>
         <div class="input-group">
-            <label>Xona ID raqami (Istalgan so'z yoki raqam)</label>
-            <input type="text" id="room-input" placeholder="Xona nomini kiriting (masalan: 123)..." autocomplete="off">
+            <label>Xona ID raqami</label>
+            <input type="text" id="room-input" placeholder="Xona nomini kiriting..." autocomplete="off">
         </div>
         <button id="join-btn">Uchrashuvni boshlash</button>
     </div>
 
+    <!-- 2. Kutish oynasi (Faqat mehmonlar uchun) -->
+    <div id="waiting-screen">
+        <h3>Ulanish kutilmoqda...</h3>
+        <p style="color: #a0a0a0; margin-top: 10px; font-size: 14px;">
+            Loyiha admini ruxsat berishini kuting.
+        </p>
+        <div class="loader"></div>
+    </div>
+
+    <!-- 3. Video uchrashuv zonasi -->
     <div id="meet-container">
+        <!-- Admin uchun bildirishnoma paneli -->
+        <div id="admin-notification">
+            <p id="notification-text">Mehmon kirishga ruxsat so'ramoqda...</p>
+            <div class="btn-group">
+                <button class="approve-btn" id="approve-btn">Ruxsat berish</button>
+                <button class="reject-btn" id="reject-btn">Rad etish</button>
+            </div>
+        </div>
+
         <div id="video-grid"></div>
     </div>
 
