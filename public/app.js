@@ -6,27 +6,27 @@ let myVideoStream;
 const myVideo = document.createElement('video');
 myVideo.muted = true;
 
-// Serverimizdan shaxsiy Xirsys ICE serverlarini so'rab olamiz
+// Serverimizdan shaxsiy Xirsys ICE serverlarimizni olamiz
 fetch('/ice-servers')
     .then(res => res.json())
     .then(iceServers => {
-        // PeerJS ulanishini olingan ICE serverlar bilan yaratamiz
+        // PeerJS dynamic serverlar ro'yxati bilan ishga tushadi
         const peer = new Peer(undefined, {
             host: location.hostname,
             port: location.port || (location.protocol === 'https:' ? 443 : 80),
             path: '/peerjs',
             config: {
-                iceServers: iceServers // Dynamic olingan TURN/STUN serverlar
+                iceServers: iceServers // Dynamic olingan serverlar manzili
             }
         });
 
         startApplication(peer);
     })
     .catch(err => {
-        console.error("ICE serverlarni olishda xatolik:", err);
+        console.error("ICE serverlarni yuklashda xato, dastur boshlana olmadi:", err);
     });
 
-// Asosiy dastur logikasi
+// Dasturni ishga tushirish funksiyasi
 function startApplication(peer) {
     navigator.mediaDevices.getUserMedia({
         video: true,
@@ -55,6 +55,8 @@ function startApplication(peer) {
                 connectToNewUser(peer, userId, stream);
             }, 1000);
         });
+    }).catch(err => {
+        console.error("Kamera yoki mikrofonga ruxsat berilmadi:", err);
     });
 
     socket.on('user-disconnected', userId => {
