@@ -1,32 +1,41 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
 
-// PeerJS sozlamalari
-// YANGI KOD (STUN serverlar integratsiyasi bilan):
+// PeerJS ulanishi (Sizning shaxsiy Metered TURN serveringiz bilan)
 const peer = new Peer(undefined, {
     host: location.hostname,
     port: location.port || (location.protocol === 'https:' ? 443 : 80),
     path: '/peerjs',
     config: {
         iceServers: [
-            // Google bepul STUN serverlari (NAT ortidagi qurilmalarni IP-manzilini aniqlash uchun)
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
+            // Standart Google STUN serverlari
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
             
-            // Ayrim juda qattiq cheklangan mobil tarmoqlar (masalan, Ucell, Beeline, Uztelecom) uchun 
-            // quyida bepul ochiq TURN server (OpenRelay proekti) qo'shilgan:
+            // Metered.ca STUN serveri
             {
-                urls: 'turn:openrelay.metered.ca:80',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
+                urls: "stun:stun.relay.metered.ca:80",
+            },
+            // Metered.ca TURN serverlari (Sizning shaxsiy ma'lumotlaringiz)
+            {
+                urls: "turn:global.relay.metered.ca:80",
+                username: "00f1f541e45ccb92ba89ea0d",
+                credential: "6w6sm5Qc9+f2HmmS",
             },
             {
-                urls: 'turn:openrelay.metered.ca:443',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
+                urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                username: "00f1f541e45ccb92ba89ea0d",
+                credential: "6w6sm5Qc9+f2HmmS",
+            },
+            {
+                urls: "turn:global.relay.metered.ca:443",
+                username: "00f1f541e45ccb92ba89ea0d",
+                credential: "6w6sm5Qc9+f2HmmS",
+            },
+            {
+                urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                username: "00f1f541e45ccb92ba89ea0d",
+                credential: "6w6sm5Qc9+f2HmmS",
             }
         ]
     }
