@@ -15,24 +15,20 @@ const peers = {};
 let myStream = null;
 let currentRoomId = '';
 let currentUsername = '';
+let iAmAdmin = false;
 
-// URL satridan xona ID raqamini avtomatik o'qib olish
 const urlRoomId = window.location.pathname.split('/')[1];
 if (urlRoomId && urlRoomId !== "") {
     roomInput.value = urlRoomId;
 }
 
-// Kamerani oldindan ishga tushirish
 navigator.mediaDevices.getUserMedia({
     video: { width: 640, height: 480, frameRate: 24 },
     audio: true
 }).then(stream => {
     myStream = stream;
-}).catch(err => {
-    console.error("Kameraga ruxsat berilmadi:", err);
-});
+}).catch(err => console.error("Kamera xatosi:", err));
 
-// Tugma bosilganda uchrashuvni boshlash
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
     const room = roomInput.value.trim();
@@ -45,85 +41,102 @@ joinBtn.addEventListener('click', () => {
     currentUsername = username;
     currentRoomId = room;
 
-    // 1. Birinchi navbatda ICE/TURN serverlarni yuklab olamiz
+    joinBtn.innerText = "Ruxsat kutilmoqda...";
+    joinBtn.disabled = true;
+
     fetch('/ice-servers')
         .then(res => res.json())
         .then(iceServers => {
-            console.log("Yuklangan ICE serverlar:", iceServers);
-            
-            // 2. TURN serverlar bilan PeerJS obyektini yaratish
             myPeer = new Peer(undefined, {
                 host: '/',
                 port: '443',
                 secure: true,
                 path: '/peerjs',
-                config: { 
-                    iceServers: iceServers,
-                    sdpSemantics: 'unified-plan'
-                }
+                config: { iceServers: iceServers, sdpSemantics: 'unified-plan' }
             });
 
-            setupPeerAndSocketLogic();
-        })
-        .catch(err => {
-            console.error("ICE server yuklashda xato, STUN ishlatiladi:", err);
-            myPeer = new Peer(undefined, {
-                host: '/',
-                port: '443',
-                secure: true,
-                path: '/peerjs',
-                config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+            myPeer.on('open', peerId => {
+                // Serverdan xonaga kirish uchun ruxsat so'rash
+                socket.emit('request-to-join', currentRoomId, currentUsername, peerId);
             });
-            setupPeerAndSocketLogic();
+
+            setupApprovalLogic();
         });
 });
 
-function setupPeerAndSocketLogic() {
-    myPeer.on('open', id => {
-        // URL manzilini dinamik o'zgartirish (/2 holatiga)
-        window.history.pushState({}, '', `/${currentRoomId}`);
+function setupApprovalLogic() {
+    // Admin mehmonni qabul qilganda yoki foydalanuvchi admin bo'lganda
+    socket.on('join-approved', (data) => {
+        if (data && data.isAdmin) {
+            iAmAdmin = true;
+        }
 
-        // Interfeysni almashtirish
+        window.history.pushState({}, '', `/${currentRoomId}`);
         lobby.style.display = 'none';
         meetContainer.style.display = 'flex';
 
+        const myLabel = iAmAdmin ? `${currentUsername} (Admin) (Siz)` : `${currentUsername} (Siz)`;
         if (myStream) {
-            addVideoStream(myVideo, myStream, `${currentUsername} (Siz)`);
+            addVideoStream(myVideo, myStream, myLabel, myPeer.id);
         }
 
-        // Serverga kirish signalini berish
-        socket.emit('join-room', currentRoomId, id);
+        socket.emit('join-room', currentRoomId, myPeer.id, currentUsername, iAmAdmin);
+        startMeetingLogics();
     });
 
-    // Kirib kelayotgan qo'ng'iroqlarga javob berish
+    // Admin kirishni taqiqlasa
+    socket.on('join-rejected', () => {
+        alert("Xona egasi (Admin) uchrashuvga kirishingizni rad etdi.");
+        joinBtn.innerText = "Uchrashuvga qo'shilish";
+        joinBtn.disabled = false;
+    });
+
+    // FAQAT ADMIN uchun: Mehmon ruxsat so'rab kutib turganda modal oynasi
+    socket.on('user-awaiting', (data) => {
+        if (!iAmAdmin) return;
+
+        const accept = confirm(`${data.username} xonaga kirishga ruxsat so'ramoqda.\nRuxsat berasizmi?`);
+        if (accept) {
+            socket.emit('accept-user', data.socketId, currentRoomId);
+        } else {
+            socket.emit('reject-user', data.socketId);
+        }
+    });
+}
+
+function startMeetingLogics() {
+    // Kiruvchi qo'ng'iroqlarni qabul qilish
     myPeer.on('call', call => {
         call.answer(myStream);
         const video = document.createElement('video');
         video.setAttribute('playsinline', 'true');
-        
+
         call.on('stream', userVideoStream => {
+            // Qo'ng'iroq qilayotgan foydalanuvchining ismini aniqlash uchun metadata ishlatish mumkin, 
+            // yoki birozdan so'ng socket orqali ism yangilanadi.
             if (!peers[call.peer]) {
-                addVideoStream(video, userVideoStream, 'Suhbatdosh', call.peer);
+                addVideoStream(video, userVideoStream, 'Yuklanmoqda...', call.peer);
                 peers[call.peer] = call;
             }
         });
     });
 
-    // Yangi mehmon qo'shilganda ulanish
-    socket.on('user-connected', userId => {
+    // Yangi foydalanuvchi ulanib ismi kelganda
+    socket.on('user-connected', (userData) => {
         setTimeout(() => {
             if (myStream) {
-                const call = myPeer.call(userId, myStream);
+                const call = myPeer.call(userData.userId, myStream);
                 const video = document.createElement('video');
                 video.setAttribute('playsinline', 'true');
-                
+
                 call.on('stream', userVideoStream => {
-                    addVideoStream(video, userVideoStream, 'Mehmon', userId);
+                    const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
+                    addVideoStream(video, userVideoStream, guestLabel, userData.userId);
                 });
-                
-                peers[userId] = call;
+
+                peers[userData.userId] = call;
             }
-        }, 1200); // Tarmoq yuklanishini oldini olish uchun 1.2 soniya kutish
+        }, 1200);
     });
 
     socket.on('user-disconnected', userId => {
@@ -133,17 +146,23 @@ function setupPeerAndSocketLogic() {
     });
 }
 
-function addVideoStream(video, stream, name, userId = null) {
+function addVideoStream(video, stream, name, userId) {
     video.srcObject = stream;
     video.onloadedmetadata = () => {
         video.play().catch(e => console.log(e));
     };
 
-    if (userId && document.getElementById(userId)) return;
+    // Agar o'sha foydalanuvchining video-boxi allaqachon bo'lsa, shunchaki ismini yangilaymiz
+    const existingBox = document.getElementById(userId);
+    if (existingBox) {
+        const label = existingBox.querySelector('.name-label');
+        if (label) label.innerText = name;
+        return;
+    }
 
     const videoBox = document.createElement('div');
     videoBox.classList.add('video-box');
-    if (userId) videoBox.id = userId;
+    videoBox.id = userId;
 
     const nameLabel = document.createElement('div');
     nameLabel.classList.add('name-label');
@@ -152,13 +171,4 @@ function addVideoStream(video, stream, name, userId = null) {
     videoBox.appendChild(video);
     videoBox.appendChild(nameLabel);
     videoGrid.appendChild(videoBox);
-}
-
-// Chat paneli boshqaruvi
-const chatBtn = document.getElementById('chat-btn');
-const chatPanel = document.getElementById('chat-panel');
-if (chatBtn && chatPanel) {
-    chatBtn.addEventListener('click', () => {
-        chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
-    });
 }
