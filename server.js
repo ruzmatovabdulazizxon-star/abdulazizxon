@@ -2,11 +2,42 @@ const express = require('express');
 const app = express();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
+const axios = require('axios');
 const path = require('path');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 const roomAdmins = {}; 
+
+// Xirsys TURN serverlarini olish uchun backend yo'li
+app.get('/ice-servers', async (req, res) => {
+    try {
+        const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
+            headers: {
+                "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
+                "Content-Type": "application/json"
+            }
+        });
+        
+        if (response.data && response.data.v && response.data.v.iceServers) {
+            let rawServers = response.data.v.iceServers;
+            let formattedServers = rawServers.map(srv => ({
+                urls: srv.url || srv.urls,
+                username: srv.username || "",
+                credential: srv.credential || ""
+            }));
+
+            // Google STUN ham qo'shiladi
+            formattedServers.push({ urls: "stun:stun.l.google.com:19302" });
+            res.json(formattedServers);
+        } else {
+            res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        }
+    } catch (error) {
+        console.error("Xirsys ulanish xatosi:", error.message);
+        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+    }
+});
 
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
