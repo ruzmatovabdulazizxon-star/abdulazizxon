@@ -1,7 +1,6 @@
 {
   "name": "zoom-loyiha",
   "version": "1.0.0",
-  "description": "Video conferencing web app",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
