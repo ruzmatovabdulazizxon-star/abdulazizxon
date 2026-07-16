@@ -49,7 +49,7 @@
         #video-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; padding: 20px; background: #141517; overflow-y: auto; align-content: center; justify-content: center; }
         .video-box { position: relative; background: #232427; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .name-label { position: absolute; bottom: 12px; left: 12px; background: rgba(0, 0, 0, 0.65); padding: 5px 12px; border-radius: 6px; font-size: 13px; }
+        .name-label { position: absolute; bottom: 12px; left: 12px; background: rgba(0, 0, 0, 0.65); padding: 5px 12px; border-radius: 6px; font-size: 13px; z-index: 10; }
         
         #control-bar { height: 85px; background: #1c1e21; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #2d3135; }
         .control-btn { background: #2d3135; border: none; width: 52px; height: 52px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
@@ -63,6 +63,45 @@
         .chat-input-area { padding: 20px; display: flex; gap: 10px; border-top: 1px solid #2d3135; }
         #chat-input { flex: 1; padding: 12px; background: #2d3135; border: none; border-radius: 8px; color: white; outline: none; }
         #send-chat-btn { background: #0e71eb; border: none; color: white; padding: 0 16px; border-radius: 8px; cursor: pointer; }
+
+        /* Zoom uslubidagi chiroyli modallar */
+        .zoom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .zoom-modal {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 24px;
+            width: 350px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            color: #fff;
+            animation: zoomIn 0.2s ease-out;
+        }
+        @keyframes zoomIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-title { margin-top: 0; font-size: 18px; font-weight: 600; color: #fff; border-bottom: 1px solid #333; padding-bottom: 12px; }
+        .modal-body { font-size: 14px; color: #ccc; margin: 20px 0; line-height: 1.5; }
+        .modal-actions { display: flex; justify-content: space-around; gap: 12px; }
+        .modal-btn { flex: 1; padding: 10px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .btn-success { background-color: #0e72ed; color: white; }
+        .btn-success:hover { background-color: #0056b3; }
+        .btn-danger { background-color: #e02424; color: white; }
+        .btn-danger:hover { background-color: #b81d1d; }
+        .btn-secondary { background-color: #333; color: white; }
+        .btn-secondary:hover { background-color: #444; }
 
         @media (max-width: 768px) {
             #meet-container { flex-direction: column; }
@@ -106,6 +145,27 @@
             <div class="chat-input-area">
                 <input type="text" id="chat-input" placeholder="Xabar yozing...">
                 <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-modal" class="zoom-modal-overlay">
+        <div class="zoom-modal">
+            <h3 class="modal-title">Xonaga kirish so'rovi</h3>
+            <p id="modal-message" class="modal-body">Foydalanuvchi uchrashuvga kirishga ruxsat so'ramoqda.</p>
+            <div class="modal-actions">
+                <button id="btn-reject" class="modal-btn btn-danger">Taqiqlash</button>
+                <button id="btn-accept" class="modal-btn btn-success">Ruxsat berish</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="guest-modal" class="zoom-modal-overlay">
+        <div class="zoom-modal">
+            <h3 id="guest-modal-title" class="modal-title">Kutish zali</h3>
+            <p id="guest-modal-message" class="modal-body">Xona egasi (Admin) tomonidan ruxsat berilishi kutilmoqda...</p>
+            <div class="modal-actions">
+                <button id="btn-guest-close" class="modal-btn btn-secondary" style="display: none;">Yopish</button>
             </div>
         </div>
     </div>
