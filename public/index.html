@@ -10,24 +10,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Umumiy Sozlamalar */
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: #0f1011;
             color: white;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
         }
-
-        /* 1. Kirish (Lobby) Oynasi */
         #lobby {
             background: #1c1e21;
             padding: 30px;
@@ -36,390 +29,48 @@
             width: 90%;
             max-width: 400px;
             text-align: center;
-            z-index: 10;
         }
-        #lobby h2 { 
-            margin-bottom: 25px; 
-            font-size: 22px;
-            font-weight: 600;
-            color: #fff;
-        }
-        .input-group { 
-            margin-bottom: 20px; 
-            text-align: left; 
-        }
-        .input-group label { 
-            display: block; 
-            font-size: 11px; 
-            color: #a0a0a0; 
-            text-transform: uppercase; 
-            margin-bottom: 6px; 
-            letter-spacing: 0.5px;
-        }
+        #lobby h2 { margin-bottom: 25px; font-size: 22px; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; font-size: 11px; color: #a0a0a0; text-transform: uppercase; margin-bottom: 6px; }
         .input-group input { 
-            width: 100%; 
-            padding: 14px; 
-            background: #2d3135; 
-            border: 1px solid #3e444a; 
-            border-radius: 8px; 
-            color: white; 
-            outline: none;
-            font-size: 15px;
-            transition: border-color 0.2s;
+            width: 100%; padding: 14px; background: #2d3135; border: 1px solid #3e444a; 
+            border-radius: 8px; color: white; outline: none; font-size: 15px; 
         }
-        .input-group input:focus {
-            border-color: #0e71eb; /* Zoom ko'k rangi */
-        }
+        .input-group input:focus { border-color: #0e71eb; }
         #join-btn { 
-            width: 100%; 
-            padding: 14px; 
-            background: #0e71eb; 
-            border: none; 
-            border-radius: 8px; 
-            color: white; 
-            font-weight: bold; 
-            font-size: 16px;
-            cursor: pointer; 
-            transition: background 0.2s;
+            width: 100%; padding: 14px; background: #0e71eb; border: none; 
+            border-radius: 8px; color: white; font-weight: bold; font-size: 16px; cursor: pointer; 
         }
-        #join-btn:hover {
-            background: #0b5cbe;
-        }
-
-        /* 2. Kutish Xonasi (Waiting Room) */
-        #waiting-screen {
-            display: none;
-            text-align: center;
-            background: #1c1e21;
-            padding: 40px 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        }
-        #waiting-screen h3 {
-            font-size: 20px;
-            margin-bottom: 10px;
-        }
-        .spinner {
-            margin: 20px auto;
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top: 4px solid #0e71eb;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* 3. Asosiy Video Zona (Desktop formatda) */
-        #meet-container {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-            flex-direction: row;
-            position: relative;
-        }
-
-        #main-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            height: 100%;
-        }
-
-        /* Dinamik Video Grid */
-        #video-grid {
-            flex: 1;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 15px;
-            padding: 20px;
-            background: #141517;
-            overflow-y: auto;
-            align-content: center;
-            justify-content: center;
-        }
-
-        .video-box {
-            position: relative;
-            background: #232427;
-            border-radius: 12px;
-            overflow: hidden;
-            aspect-ratio: 16/9;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        video { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
-        }
-        .local-video { 
-            transform: scaleX(-1); /* O'zini ko'zgudek ko'rish */
-        } 
-
-        .name-label {
-            position: absolute;
-            bottom: 12px;
-            left: 12px;
-            background: rgba(0, 0, 0, 0.65);
-            padding: 5px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            backdrop-filter: blur(4px);
-            z-index: 5;
-        }
-
-        /* Pastki Boshqaruv Paneli */
-        #control-bar {
-            height: 85px;
-            background: #1c1e21;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            padding: 0 25px;
-            border-top: 1px solid #2d3135;
-            z-index: 10;
-        }
-
-        .control-btn {
-            background: #2d3135;
-            border: none;
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            transition: all 0.2s ease;
-        }
-
-        .control-btn:hover { 
-            background: #3e444a; 
-        }
-        .control-btn.active { 
-            background: #e74c3c; /* Qizil holat (o'chirilganda) */
-        } 
-        .leave-btn { 
-            background: #e74c3c; 
-            border-radius: 8px; 
-            width: auto; 
-            padding: 0 22px; 
-            font-weight: bold;
-            font-size: 15px;
-        }
-        .leave-btn:hover { 
-            background: #c0392b; 
-        }
-
-        /* O'ng tarafdagi Chat Paneli */
-        #chat-panel {
-            width: 350px;
-            background: #1c1e21;
-            border-left: 1px solid #2d3135;
-            display: none;
-            flex-direction: column;
-            height: 100%;
-            z-index: 15;
-        }
-
-        .chat-header { 
-            padding: 20px; 
-            border-bottom: 1px solid #2d3135; 
-            font-weight: 600;
-            font-size: 16px;
-        }
-        #chat-messages { 
-            flex: 1; 
-            padding: 20px; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-        }
-        .message { 
-            background: #2d3135; 
-            padding: 10px 14px; 
-            border-radius: 8px; 
-            max-width: 85%; 
-            font-size: 14.5px; 
-            align-self: flex-start;
-            word-break: break-word;
-        }
-        .message .sender { 
-            font-size: 11px; 
-            color: #2ecc71; 
-            margin-bottom: 4px; 
-            font-weight: bold; 
-        }
+        #join-btn:hover { background: #0b5cbe; }
         
-        .chat-input-area { 
-            padding: 20px; 
-            display: flex; 
-            gap: 10px; 
-            border-top: 1px solid #2d3135; 
-        }
-        #chat-input { 
-            flex: 1; 
-            padding: 12px; 
-            background: #2d3135; 
-            border: none; 
-            border-radius: 8px; 
-            color: white; 
-            outline: none; 
-            font-size: 14px;
-        }
-        #send-chat-btn { 
-            background: #0e71eb; 
-            border: none; 
-            color: white; 
-            padding: 0 16px; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            transition: background 0.2s;
-        }
-        #send-chat-btn:hover {
-            background: #0b5cbe;
-        }
-
-        /* Admin Ruxsat berish paneli */
-        #admin-notification {
-            display: none;
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #1c1e21;
-            border: 2px solid #0e71eb;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            z-index: 100;
-            width: 320px;
-            backdrop-filter: blur(10px);
-        }
-        #admin-notification p {
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        .btn-group { 
-            display: flex; 
-            gap: 10px; 
-            margin-top: 15px; 
-        }
-        .approve-btn { 
-            flex: 1; 
-            background: #2ecc71; 
-            border: none; 
-            color: white; 
-            padding: 10px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold; 
-        }
-        .reject-btn { 
-            flex: 1; 
-            background: #e74c3c; 
-            border: none; 
-            color: white; 
-            padding: 10px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold; 
-        }
-
-        /* ======================================================= */
-        /* MULTI-DEVICE RESPONSIVE (TELEFON VA PLANSHETLAR UCHUN)  */
-        /* ======================================================= */
+        #meet-container { display: none; width: 100vw; height: 100vh; flex-direction: row; }
+        #main-area { flex: 1; display: flex; flex-direction: column; height: 100%; position: relative; }
+        #video-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; padding: 20px; background: #141517; overflow-y: auto; align-content: center; justify-content: center; }
+        .video-box { position: relative; background: #232427; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .name-label { position: absolute; bottom: 12px; left: 12px; background: rgba(0, 0, 0, 0.65); padding: 5px 12px; border-radius: 6px; font-size: 13px; }
         
+        #control-bar { height: 85px; background: #1c1e21; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #2d3135; }
+        .control-btn { background: #2d3135; border: none; width: 52px; height: 52px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .control-btn:hover { background: #3e444a; }
+        .leave-btn { background: #e74c3c; border-radius: 8px; width: auto; padding: 0 22px; font-weight: bold; font-size: 15px; }
+        
+        #chat-panel { width: 350px; background: #1c1e21; border-left: 1px solid #2d3135; display: none; flex-direction: column; height: 100%; }
+        .chat-header { padding: 20px; border-bottom: 1px solid #2d3135; font-weight: 600; }
+        #chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .message { background: #2d3135; padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; }
+        .chat-input-area { padding: 20px; display: flex; gap: 10px; border-top: 1px solid #2d3135; }
+        #chat-input { flex: 1; padding: 12px; background: #2d3135; border: none; border-radius: 8px; color: white; outline: none; }
+        #send-chat-btn { background: #0e71eb; border: none; color: white; padding: 0 16px; border-radius: 8px; cursor: pointer; }
+
         @media (max-width: 768px) {
-            /* Mobil ekranda asosiy bloklarni ustma-ust taxlash */
-            #meet-container {
-                flex-direction: column;
-            }
-
-            /* Video tarmoqni mobil ekranga moslash */
-            #video-grid {
-                grid-template-columns: 1fr !important; /* Faqat bitta qator */
-                padding: 10px;
-                gap: 10px;
-            }
-
-            .video-box {
-                aspect-ratio: 4/3; /* Mobil ekran uchun ixchamroq kvadrat/to'rtburchak */
-                max-height: 35vh;   /* Ekranning ko'p qismini to'sib qo'ymasligi uchun */
-            }
-
-            /* Boshqaruv tugmalar panelini ixchamlashtirish */
-            #control-bar {
-                height: 75px;
-                gap: 10px;
-                padding: 0 10px;
-            }
-
-            .control-btn {
-                width: 44px;
-                height: 44px;
-                font-size: 15px;
-            }
-
-            .leave-btn {
-                padding: 0 12px;
-                font-size: 13px;
-            }
-
-            /* Chat ochilganda videoni qisqartirib, pastdan joy ajratish */
-            #chat-panel {
-                width: 100%;
-                height: 40vh; /* Ekranning pastki 40% qismini egallaydi */
-                border-left: none;
-                border-top: 1px solid #2d3135;
-                position: relative;
-            }
-
-            .chat-header {
-                padding: 10px 15px;
-                font-size: 14px;
-            }
-
-            #chat-messages {
-                padding: 10px 15px;
-                gap: 8px;
-            }
-
-            .chat-input-area {
-                padding: 10px 15px;
-            }
-            
-            #admin-notification {
-                width: calc(100% - 40px);
-                left: 20px;
-                right: 20px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            /* Kichik mobil telefonlar uchun maxsus (boshqaruv matnlarini yashirish) */
-            .leave-btn span {
-                display: none; /* Faqat ikonka qoladi */
-            }
-            .leave-btn {
-                width: 44px;
-                height: 44px;
-                border-radius: 50%;
-                padding: 0;
-            }
+            #meet-container { flex-direction: column; }
+            #video-grid { grid-template-columns: 1fr !important; padding: 10px; }
+            .video-box { aspect-ratio: 4/3; max-height: 35vh; }
+            #control-bar { height: 75px; gap: 10px; }
+            .control-btn { width: 44px; height: 44px; font-size: 15px; }
+            #chat-panel { width: 100%; height: 40vh; border-left: none; border-top: 1px solid #2d3135; }
         }
     </style>
 </head>
@@ -438,38 +89,22 @@
         <button id="join-btn">Uchrashuvga qo'shilish</button>
     </div>
 
-    <div id="waiting-screen">
-        <div class="spinner"></div>
-        <h3>Iltimos, kuting...</h3>
-        <p style="color: #a0a0a0; margin-top: 10px; font-size: 14px;">Xona administratori sizni qabul qilishini kuting.</p>
-    </div>
-
     <div id="meet-container">
-        <div id="admin-notification">
-            <p id="notification-text">Suhbatdosh xonaga kirishga ruxsat so'ramoqda...</p>
-            <div class="btn-group">
-                <button class="approve-btn" id="approve-btn">Qabul qilish</button>
-                <button class="reject-btn" id="reject-btn">Rad etish</button>
-            </div>
-        </div>
-
         <div id="main-area">
             <div id="video-grid"></div>
-
             <div id="control-bar">
-                <button class="control-btn" id="mic-btn" title="Mikrofon"><i class="fa fa-microphone"></i></button>
-                <button class="control-btn" id="cam-btn" title="Kamera"><i class="fa fa-video"></i></button>
-                <button class="control-btn" id="share-btn" title="Ekran ulashish"><i class="fa fa-desktop"></i></button>
-                <button class="control-btn" id="chat-btn" title="Chat"><i class="fa fa-comment"></i></button>
-                <button class="control-btn leave-btn" id="leave-btn" title="Chiqish"><i class="fa fa-sign-out-alt"></i> <span>Chiqish</span></button>
+                <button class="control-btn" id="mic-btn"><i class="fa fa-microphone"></i></button>
+                <button class="control-btn" id="cam-btn"><i class="fa fa-video"></i></button>
+                <button class="control-btn" id="chat-btn"><i class="fa fa-comment"></i></button>
+                <button class="control-btn leave-btn" id="leave-btn"><i class="fa fa-sign-out-alt"></i> Chiqish</button>
             </div>
         </div>
 
         <div id="chat-panel">
-            <div class="chat-header">Guruh Chati</div>
+            <div class="chat-header">Xona Chati</div>
             <div id="chat-messages"></div>
             <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="Xabar yozing..." autocomplete="off">
+                <input type="text" id="chat-input" placeholder="Xabar yozing...">
                 <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
             </div>
         </div>
