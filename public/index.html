@@ -148,4 +148,332 @@
         .video-box {
             position: relative;
             background: #232427;
-            border-radius:
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+        }
+        .local-video { 
+            transform: scaleX(-1); /* O'zini ko'zgudek ko'rish */
+        } 
+
+        .name-label {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.65);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            backdrop-filter: blur(4px);
+            z-index: 5;
+        }
+
+        /* Pastki Boshqaruv Paneli */
+        #control-bar {
+            height: 85px;
+            background: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 0 25px;
+            border-top: 1px solid #2d3135;
+            z-index: 10;
+        }
+
+        .control-btn {
+            background: #2d3135;
+            border: none;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover { 
+            background: #3e444a; 
+        }
+        .control-btn.active { 
+            background: #e74c3c; /* Qizil holat (o'chirilganda) */
+        } 
+        .leave-btn { 
+            background: #e74c3c; 
+            border-radius: 8px; 
+            width: auto; 
+            padding: 0 22px; 
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .leave-btn:hover { 
+            background: #c0392b; 
+        }
+
+        /* O'ng tarafdagi Chat Paneli */
+        #chat-panel {
+            width: 350px;
+            background: #1c1e21;
+            border-left: 1px solid #2d3135;
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            z-index: 15;
+        }
+
+        .chat-header { 
+            padding: 20px; 
+            border-bottom: 1px solid #2d3135; 
+            font-weight: 600;
+            font-size: 16px;
+        }
+        #chat-messages { 
+            flex: 1; 
+            padding: 20px; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+        }
+        .message { 
+            background: #2d3135; 
+            padding: 10px 14px; 
+            border-radius: 8px; 
+            max-width: 85%; 
+            font-size: 14.5px; 
+            align-self: flex-start;
+            word-break: break-word;
+        }
+        .message .sender { 
+            font-size: 11px; 
+            color: #2ecc71; 
+            margin-bottom: 4px; 
+            font-weight: bold; 
+        }
+        
+        .chat-input-area { 
+            padding: 20px; 
+            display: flex; 
+            gap: 10px; 
+            border-top: 1px solid #2d3135; 
+        }
+        #chat-input { 
+            flex: 1; 
+            padding: 12px; 
+            background: #2d3135; 
+            border: none; 
+            border-radius: 8px; 
+            color: white; 
+            outline: none; 
+            font-size: 14px;
+        }
+        #send-chat-btn { 
+            background: #0e71eb; 
+            border: none; 
+            color: white; 
+            padding: 0 16px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: background 0.2s;
+        }
+        #send-chat-btn:hover {
+            background: #0b5cbe;
+        }
+
+        /* Admin Ruxsat berish paneli */
+        #admin-notification {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #1c1e21;
+            border: 2px solid #0e71eb;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            z-index: 100;
+            width: 320px;
+            backdrop-filter: blur(10px);
+        }
+        #admin-notification p {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .btn-group { 
+            display: flex; 
+            gap: 10px; 
+            margin-top: 15px; 
+        }
+        .approve-btn { 
+            flex: 1; 
+            background: #2ecc71; 
+            border: none; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+        }
+        .reject-btn { 
+            flex: 1; 
+            background: #e74c3c; 
+            border: none; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+        }
+
+        /* ======================================================= */
+        /* MULTI-DEVICE RESPONSIVE (TELEFON VA PLANSHETLAR UCHUN)  */
+        /* ======================================================= */
+        
+        @media (max-width: 768px) {
+            /* Mobil ekranda asosiy bloklarni ustma-ust taxlash */
+            #meet-container {
+                flex-direction: column;
+            }
+
+            /* Video tarmoqni mobil ekranga moslash */
+            #video-grid {
+                grid-template-columns: 1fr !important; /* Faqat bitta qator */
+                padding: 10px;
+                gap: 10px;
+            }
+
+            .video-box {
+                aspect-ratio: 4/3; /* Mobil ekran uchun ixchamroq kvadrat/to'rtburchak */
+                max-height: 35vh;   /* Ekranning ko'p qismini to'sib qo'ymasligi uchun */
+            }
+
+            /* Boshqaruv tugmalar panelini ixchamlashtirish */
+            #control-bar {
+                height: 75px;
+                gap: 10px;
+                padding: 0 10px;
+            }
+
+            .control-btn {
+                width: 44px;
+                height: 44px;
+                font-size: 15px;
+            }
+
+            .leave-btn {
+                padding: 0 12px;
+                font-size: 13px;
+            }
+
+            /* Chat ochilganda videoni qisqartirib, pastdan joy ajratish */
+            #chat-panel {
+                width: 100%;
+                height: 40vh; /* Ekranning pastki 40% qismini egallaydi */
+                border-left: none;
+                border-top: 1px solid #2d3135;
+                position: relative;
+            }
+
+            .chat-header {
+                padding: 10px 15px;
+                font-size: 14px;
+            }
+
+            #chat-messages {
+                padding: 10px 15px;
+                gap: 8px;
+            }
+
+            .chat-input-area {
+                padding: 10px 15px;
+            }
+            
+            #admin-notification {
+                width: calc(100% - 40px);
+                left: 20px;
+                right: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            /* Kichik mobil telefonlar uchun maxsus (boshqaruv matnlarini yashirish) */
+            .leave-btn span {
+                display: none; /* Faqat ikonka qoladi */
+            }
+            .leave-btn {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="lobby">
+        <h2>Zoom Uchrashuv</h2>
+        <div class="input-group">
+            <label>Ismingiz</label>
+            <input type="text" id="username-input" placeholder="Ismingizni kiriting..." autocomplete="off">
+        </div>
+        <div class="input-group">
+            <label>Xona ID raqami</label>
+            <input type="text" id="room-input" placeholder="Xona nomini yozing..." autocomplete="off">
+        </div>
+        <button id="join-btn">Uchrashuvga qo'shilish</button>
+    </div>
+
+    <div id="waiting-screen">
+        <div class="spinner"></div>
+        <h3>Iltimos, kuting...</h3>
+        <p style="color: #a0a0a0; margin-top: 10px; font-size: 14px;">Xona administratori sizni qabul qilishini kuting.</p>
+    </div>
+
+    <div id="meet-container">
+        <div id="admin-notification">
+            <p id="notification-text">Suhbatdosh xonaga kirishga ruxsat so'ramoqda...</p>
+            <div class="btn-group">
+                <button class="approve-btn" id="approve-btn">Qabul qilish</button>
+                <button class="reject-btn" id="reject-btn">Rad etish</button>
+            </div>
+        </div>
+
+        <div id="main-area">
+            <div id="video-grid"></div>
+
+            <div id="control-bar">
+                <button class="control-btn" id="mic-btn" title="Mikrofon"><i class="fa fa-microphone"></i></button>
+                <button class="control-btn" id="cam-btn" title="Kamera"><i class="fa fa-video"></i></button>
+                <button class="control-btn" id="share-btn" title="Ekran ulashish"><i class="fa fa-desktop"></i></button>
+                <button class="control-btn" id="chat-btn" title="Chat"><i class="fa fa-comment"></i></button>
+                <button class="control-btn leave-btn" id="leave-btn" title="Chiqish"><i class="fa fa-sign-out-alt"></i> <span>Chiqish</span></button>
+            </div>
+        </div>
+
+        <div id="chat-panel">
+            <div class="chat-header">Guruh Chati</div>
+            <div id="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Xabar yozing..." autocomplete="off">
+                <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
