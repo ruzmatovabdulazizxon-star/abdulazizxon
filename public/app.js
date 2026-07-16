@@ -99,28 +99,32 @@ function setupApprovalLogic() {
         meetContainer.style.display = 'flex';
 
         try {
-            // Kamerani ishga tushirish (Mobil tarmoqlar uchun optimal tezlik)
+            // Telefon kamerasi uchun optimal o'lchamlar (uzatish oson bo'lishi uchun)
             myStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 480, height: 360, frameRate: 20 },
+                video: { 
+                    width: { ideal: 640 }, 
+                    height: { ideal: 480 }, 
+                    frameRate: { ideal: 24 } 
+                },
                 audio: true
             });
 
-            // Xirsys serverlarini backend'dan yuklab olish
             const res = await fetch('/ice-servers');
             const iceServers = await res.json();
 
-            // DIQQAT: PeerJS Cloud serveriga ulangan holda Xirsys TURN'ni qo'llaymiz!
+            // PeerJS Cloud serveriga Xirsys TURN ulanishlarini beramiz
             myPeer = new Peer(undefined, {
                 config: { 
                     iceServers: iceServers,
-                    iceTransportPolicy: 'all' // Majburiy TURN ishlashini ta'minlaydi
+                    iceCandidatePoolSize: 10
                 }
             });
 
             myPeer.on('open', peerId => {
                 myVideo = document.createElement('video');
                 myVideo.muted = true;
-                myVideo.setAttribute('playsinline', 'true');
+                myVideo.autoplay = true; // MUHIM: iOS Safari uchun majburiy autoplay
+                myVideo.setAttribute('playsinline', 'true'); // MUHIM: Telefon to'liq ekranga olib o'tmasligi uchun
 
                 const myLabel = iAmAdmin ? `${currentUsername} (Admin) (Siz)` : `${currentUsername} (Siz)`;
                 userNames[peerId] = myLabel;
@@ -131,12 +135,12 @@ function setupApprovalLogic() {
             });
 
             myPeer.on('error', err => {
-                console.error("PeerJS Cloud ulanish xatosi:", err);
+                console.error("PeerJS Xatosi:", err);
                 resetMeetingState();
             });
 
         } catch (err) {
-            console.error(err);
+            console.error("Kamera xatosi:", err);
             alert("Kamera yoki mikrofonga ruxsat berilmadi!");
             resetMeetingState();
         }
@@ -172,7 +176,8 @@ function startMeetingLogics() {
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
-        video.setAttribute('playsinline', 'true');
+        video.autoplay = true; // MUHIM: Mobil telefonlar uchun majburiy autoplay
+        video.setAttribute('playsinline', 'true'); // MUHIM: Safari uchun
 
         call.on('stream', userVideoStream => {
             const nameToShow = userNames[call.peer] || "Suhbatdosh";
@@ -189,7 +194,8 @@ function startMeetingLogics() {
             if (myStream && myPeer && !myPeer.destroyed) {
                 const call = myPeer.call(userData.userId, isScreenSharing ? screenStream : myStream);
                 const video = document.createElement('video');
-                video.setAttribute('playsinline', 'true');
+                video.autoplay = true; // MUHIM: Mobil telefonlar uchun majburiy autoplay
+                video.setAttribute('playsinline', 'true'); // MUHIM: Safari uchun
 
                 call.on('stream', userVideoStream => {
                     addVideoStream(video, userVideoStream, guestLabel, userData.userId);
@@ -292,7 +298,17 @@ function replaceVideoTrack(newTrack) {
 
 function addVideoStream(video, stream, name, userId) {
     video.srcObject = stream;
-    video.onloadedmetadata = () => { video.play().catch(e => console.log(e)); };
+    
+    // Mobil Safari uchun majburiy ijro mantiqi
+    video.onloadedmetadata = () => { 
+        video.play().catch(e => {
+            console.log("Autoplay bloklandi, qayta urinib ko'rilmoqda...", e);
+            // Agar foydalanuvchi ekranga bosmaguncha bloklansa, datchik o'rnatamiz
+            document.body.addEventListener('click', () => {
+                video.play().catch(err => console.log("Majburiy ijro xatosi:", err));
+            }, { once: true });
+        }); 
+    };
 
     const existingBox = document.getElementById(userId);
     if (existingBox) {
