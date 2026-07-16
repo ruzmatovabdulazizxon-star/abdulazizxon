@@ -6,30 +6,7 @@ const joinBtn = document.getElementById('join-btn');
 const usernameInput = document.getElementById('username-input');
 const roomInput = document.getElementById('room-input');
 
-// Xirsys STUN/TURN serverlar konfiguratsiyasi
-const peerConfiguration = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-            urls: 'turn:global.xirsys.com:3478?transport=udp',
-            username: 'abdulaziz', 
-            credential: 'c0a65ce0-8033-11f1-8a6c-f2f74e209366'
-        },
-        {
-            urls: 'turn:global.xirsys.com:3478?transport=tcp',
-            username: 'abdulaziz',
-            credential: 'c0a65ce0-8033-11f1-8a6c-f2f74e209366'
-        }
-    ]
-};
-
-const myPeer = new Peer(undefined, {
-    host: '/',
-    port: '443',
-    secure: true,
-    config: peerConfiguration
-});
-
+let myPeer = null;
 const myVideo = document.createElement('video');
 myVideo.muted = true;
 myVideo.setAttribute('playsinline', 'true');
@@ -39,42 +16,23 @@ let myStream = null;
 let currentRoomId = '';
 let currentUsername = '';
 
-// --- URL'dan Xona ID'sini avtomatik o'qib olish logikasi ---
-// Agar foydalanuvchi havola orqali kirsa (masalan: /2), xona inputiga avtomatik '2' yoziladi
+// URL satridan xona ID raqamini avtomatik o'qib olish
 const urlRoomId = window.location.pathname.split('/')[1];
 if (urlRoomId && urlRoomId !== "") {
     roomInput.value = urlRoomId;
 }
 
-// Kamera va mikrofonni oldindan tayyorlash
+// Kamerani oldindan ishga tushirish
 navigator.mediaDevices.getUserMedia({
     video: { width: 640, height: 480, frameRate: 24 },
     audio: true
 }).then(stream => {
     myStream = stream;
-
-    myPeer.on('call', call => {
-        call.answer(stream);
-        const video = document.createElement('video');
-        video.setAttribute('playsinline', 'true');
-        call.on('stream', userVideoStream => {
-            if (!peers[call.peer]) {
-                addVideoStream(video, userVideoStream, 'Suhbatdosh');
-                peers[call.peer] = call;
-            }
-        });
-    });
-
-    socket.on('user-connected', userId => {
-        setTimeout(() => {
-            connectToNewUser(userId, stream);
-        }, 1000);
-    });
 }).catch(err => {
-    console.error("Media qurilmalarga ulanishda xatolik:", err);
+    console.error("Kameraga ruxsat berilmadi:", err);
 });
 
-// "Uchrashuvga qo'shilish" tugmasi bosilganda
+// Tugma bosilganda uchrashuvni boshlash
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
     const room = roomInput.value.trim();
@@ -87,37 +45,92 @@ joinBtn.addEventListener('click', () => {
     currentUsername = username;
     currentRoomId = room;
 
-    // --- Havolani (URL) dinamik o'zgartirish ---
-    // Brauzer satrini "abdulazizxon.onrender.com/2" ko'rinishiga o'tkazadi
-    window.history.pushState({}, '', `/${currentRoomId}`);
+    // 1. Birinchi navbatda ICE/TURN serverlarni yuklab olamiz
+    fetch('/ice-servers')
+        .then(res => res.json())
+        .then(iceServers => {
+            console.log("Yuklangan ICE serverlar:", iceServers);
+            
+            // 2. TURN serverlar bilan PeerJS obyektini yaratish
+            myPeer = new Peer(undefined, {
+                host: '/',
+                port: '443',
+                secure: true,
+                path: '/peerjs',
+                config: { 
+                    iceServers: iceServers,
+                    sdpSemantics: 'unified-plan'
+                }
+            });
 
-    // Lobby oynasini yashirib, video maydonni ko'rsatish
-    lobby.style.display = 'none';
-    meetContainer.style.display = 'flex';
-
-    // O'z videomizni ekranga chiqarish
-    if (myStream) {
-        addVideoStream(myVideo, myStream, `${currentUsername} (Siz)`);
-    }
-
-    // Serverga ulanish signalini yuborish
-    socket.emit('join-room', currentRoomId, myPeer.id);
+            setupPeerAndSocketLogic();
+        })
+        .catch(err => {
+            console.error("ICE server yuklashda xato, STUN ishlatiladi:", err);
+            myPeer = new Peer(undefined, {
+                host: '/',
+                port: '443',
+                secure: true,
+                path: '/peerjs',
+                config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+            });
+            setupPeerAndSocketLogic();
+        });
 });
 
-socket.on('user-disconnected', userId => {
-    if (peers[userId]) peers[userId].close();
-    const element = document.getElementById(userId);
-    if (element) element.remove();
-});
+function setupPeerAndSocketLogic() {
+    myPeer.on('open', id => {
+        // URL manzilini dinamik o'zgartirish (/2 holatiga)
+        window.history.pushState({}, '', `/${currentRoomId}`);
 
-function connectToNewUser(userId, stream) {
-    const call = myPeer.call(userId, stream);
-    const video = document.createElement('video');
-    video.setAttribute('playsinline', 'true');
-    call.on('stream', userVideoStream => {
-        addVideoStream(video, userVideoStream, 'Mehmon', userId);
+        // Interfeysni almashtirish
+        lobby.style.display = 'none';
+        meetContainer.style.display = 'flex';
+
+        if (myStream) {
+            addVideoStream(myVideo, myStream, `${currentUsername} (Siz)`);
+        }
+
+        // Serverga kirish signalini berish
+        socket.emit('join-room', currentRoomId, id);
     });
-    peers[userId] = call;
+
+    // Kirib kelayotgan qo'ng'iroqlarga javob berish
+    myPeer.on('call', call => {
+        call.answer(myStream);
+        const video = document.createElement('video');
+        video.setAttribute('playsinline', 'true');
+        
+        call.on('stream', userVideoStream => {
+            if (!peers[call.peer]) {
+                addVideoStream(video, userVideoStream, 'Suhbatdosh', call.peer);
+                peers[call.peer] = call;
+            }
+        });
+    });
+
+    // Yangi mehmon qo'shilganda ulanish
+    socket.on('user-connected', userId => {
+        setTimeout(() => {
+            if (myStream) {
+                const call = myPeer.call(userId, myStream);
+                const video = document.createElement('video');
+                video.setAttribute('playsinline', 'true');
+                
+                call.on('stream', userVideoStream => {
+                    addVideoStream(video, userVideoStream, 'Mehmon', userId);
+                });
+                
+                peers[userId] = call;
+            }
+        }, 1200); // Tarmoq yuklanishini oldini olish uchun 1.2 soniya kutish
+    });
+
+    socket.on('user-disconnected', userId => {
+        if (peers[userId]) peers[userId].close();
+        const element = document.getElementById(userId);
+        if (element) element.remove();
+    });
 }
 
 function addVideoStream(video, stream, name, userId = null) {
