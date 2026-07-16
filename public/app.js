@@ -65,7 +65,6 @@ btnGuestClose.addEventListener('click', () => {
     resetMeetingState();
 });
 
-// Uchrashuvga kirishni so'rash
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
     const room = roomInput.value.trim();
@@ -100,20 +99,21 @@ function setupApprovalLogic() {
         meetContainer.style.display = 'flex';
 
         try {
-            // Kamerani ishga tushirish (Optima rezolyutsiya)
+            // Kamerani ishga tushirish (Mobil tarmoqlar uchun optimal tezlik)
             myStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 640, height: 480, frameRate: 24 },
+                video: { width: 480, height: 360, frameRate: 20 },
                 audio: true
             });
 
-            // DIQQAT: PeerJS Rasmiy Global Bulutli serveriga ulanamiz! (Render muammolaridan qutulamiz)
+            // Xirsys serverlarini backend'dan yuklab olish
+            const res = await fetch('/ice-servers');
+            const iceServers = await res.json();
+
+            // DIQQAT: PeerJS Cloud serveriga ulangan holda Xirsys TURN'ni qo'llaymiz!
             myPeer = new Peer(undefined, {
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
+                config: { 
+                    iceServers: iceServers,
+                    iceTransportPolicy: 'all' // Majburiy TURN ishlashini ta'minlaydi
                 }
             });
 
@@ -131,7 +131,7 @@ function setupApprovalLogic() {
             });
 
             myPeer.on('error', err => {
-                console.error("PeerJS Cloud Error:", err);
+                console.error("PeerJS Cloud ulanish xatosi:", err);
                 resetMeetingState();
             });
 
@@ -169,7 +169,6 @@ function startMeetingLogics() {
     socket.off('user-disconnected');
     socket.off('receive-chat-message');
 
-    // Chaqiriqlarga javob berish
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
@@ -182,7 +181,6 @@ function startMeetingLogics() {
         });
     });
 
-    // Yangi ulanish
     socket.on('user-connected', (userData) => {
         const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
         userNames[userData.userId] = guestLabel;
