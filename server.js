@@ -15,21 +15,36 @@ app.use('/peerjs', peerServer);
 
 const roomAdmins = {}; 
 
+// XIRSYS TURN/STUN formatini PeerJS ga moslab tozalash
 app.get('/ice-servers', async (req, res) => {
     try {
-        const response = await axios.put('https://global.xirsys.com/_turn/MyFirstApp', {}, {
+        const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
         });
+        
         if (response.data && response.data.v && response.data.v.iceServers) {
-            res.json(response.data.v.iceServers);
+            let rawServers = response.data.v.iceServers;
+            // PeerJS formatiga moslash: massiv elementlarini to'g'ri formatga o'tkazamiz
+            let formattedServers = [];
+            if (Array.isArray(rawServers)) {
+                formattedServers = rawServers.map(srv => {
+                    let config = { urls: srv.url || srv.urls };
+                    if (srv.username) config.username = srv.username;
+                    if (srv.credential) config.credential = srv.credential;
+                    return config;
+                });
+            } else if (rawServers.iceServers) {
+                formattedServers = rawServers.iceServers;
+            }
+            res.json(formattedServers);
         } else {
             res.json([{ urls: "stun:stun.l.google.com:19302" }]);
         }
     } catch (error) {
-        console.error("Xirsys API xatosi:", error.message);
+        console.error("Xirsys API ulanish xatosi:", error.message);
         res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
@@ -39,7 +54,7 @@ app.get('*', (req, res) => {
 });
 
 io.on('connection', socket => {
-    // Ruxsat so'rash
+    // Ruxsat so'rash tizimi
     socket.on('request-to-join', (roomId, username, peerId) => {
         if (!roomAdmins[roomId]) {
             roomAdmins[roomId] = socket.id;
@@ -64,18 +79,16 @@ io.on('connection', socket => {
         io.to(guestSocketId).emit('join-rejected');
     });
 
-    // Xonaga rasman ulanish
+    // Xonaga kirish
     socket.on('join-room', (roomId, userId, username, isAdmin) => {
         socket.join(roomId);
         
-        // Yangi kirgan odam haqida xonadagilarga xabar berish
         socket.to(roomId).emit('user-connected', { 
             userId: userId, 
             username: username, 
             isAdmin: isAdmin 
         });
 
-        // Chat xabarlarini tarqatish
         socket.on('send-chat-message', (messageText) => {
             io.to(roomId).emit('receive-chat-message', {
                 username: username,
@@ -93,4 +106,4 @@ io.on('connection', socket => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server ${PORT}-portda faol`));
