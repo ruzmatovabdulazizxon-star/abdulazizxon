@@ -15,7 +15,6 @@ app.use('/peerjs', peerServer);
 
 const roomAdmins = {}; 
 
-// XIRSYS TURN/STUN formatini PeerJS ga moslab tozalash
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
@@ -27,7 +26,6 @@ app.get('/ice-servers', async (req, res) => {
         
         if (response.data && response.data.v && response.data.v.iceServers) {
             let rawServers = response.data.v.iceServers;
-            // PeerJS formatiga moslash: massiv elementlarini to'g'ri formatga o'tkazamiz
             let formattedServers = [];
             if (Array.isArray(rawServers)) {
                 formattedServers = rawServers.map(srv => {
@@ -54,7 +52,9 @@ app.get('*', (req, res) => {
 });
 
 io.on('connection', socket => {
-    // Ruxsat so'rash tizimi
+    let currentRoom = null;
+    let currentUserId = null;
+
     socket.on('request-to-join', (roomId, username, peerId) => {
         if (!roomAdmins[roomId]) {
             roomAdmins[roomId] = socket.id;
@@ -79,8 +79,9 @@ io.on('connection', socket => {
         io.to(guestSocketId).emit('join-rejected');
     });
 
-    // Xonaga kirish
     socket.on('join-room', (roomId, userId, username, isAdmin) => {
+        currentRoom = roomId;
+        currentUserId = userId;
         socket.join(roomId);
         
         socket.to(roomId).emit('user-connected', { 
@@ -95,15 +96,28 @@ io.on('connection', socket => {
                 message: messageText
             });
         });
+    });
 
-        socket.on('disconnect', () => {
-            if (roomAdmins[roomId] === socket.id) {
-                delete roomAdmins[roomId];
+    // Majburiy chiqib ketish signalini tinglash
+    socket.on('leave-room-signal', () => {
+        if (currentRoom && currentUserId) {
+            socket.to(currentRoom).emit('user-disconnected', currentUserId);
+            if (roomAdmins[currentRoom] === socket.id) {
+                delete roomAdmins[currentRoom];
             }
-            socket.to(roomId).emit('user-disconnected', userId);
-        });
+            socket.leave(currentRoom);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        if (currentRoom && currentUserId) {
+            socket.to(currentRoom).emit('user-disconnected', currentUserId);
+            if (roomAdmins[currentRoom] === socket.id) {
+                delete roomAdmins[currentRoom];
+            }
+        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server ${PORT}-portda faol`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
