@@ -10,11 +10,11 @@ const peerServer = ExpressPeerServer(server, {
     debug: true
 });
 
-// 1. Statik fayllarni birinchi bo'lib ro'yxatdan o'tkazamiz (Juda muhim!)
+// Statik fayllarni ulash
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/peerjs', peerServer);
 
-// 2. XIRSYS TURN/STUN server sozlamalarini olish api-liniyasi
+// Xirsys TURN serverlarini olish uchun API
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.com/_turn/MyFirstApp', {}, {
@@ -23,26 +23,27 @@ app.get('/ice-servers', async (req, res) => {
                 "Content-Type": "application/json"
             }
         });
-        res.json(response.data.v);
+        
+        if (response.data && response.data.v && response.data.v.iceServers) {
+            res.json(response.data.v.iceServers); // Aniq faqat massivni qaytaramiz
+        } else {
+            res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        }
     } catch (error) {
-        console.error("Xirsys API xatoligi:", error.message);
-        // Agar Xirsys ishlamay qolsa, zaxira sifatida Google STUN serverini qaytaramiz
-        res.json({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        console.error("Xirsys API xatosi:", error.message);
+        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
 
-// 3. Har qanday dinamik URL (masalan: /2 yoki /room-abc) kelganda index.html ni qaytarish
+// Istalgan dinamik URL uchun index.html ni yuborish (/2 yoki /room123)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- Socket.io Uchrashuv Logikasi ---
+// Socket.io xonalar logikasi
 io.on('connection', socket => {
     socket.on('join-room', (roomId, userId) => {
-        // Foydalanuvchini ko'rsatilgan xona kanaliga kirgizish
         socket.join(roomId);
-        
-        // U bergan xonadagi boshqa barcha foydalanuvchilarga xabar berish
         socket.to(roomId).emit('user-connected', userId);
 
         socket.on('disconnect', () => {
@@ -51,8 +52,5 @@ io.on('connection', socket => {
     });
 });
 
-// Render uchun dinamik port sozlamasi
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server ${PORT}-portda muvaffaqiyatli ishga tushdi.`);
-});
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
