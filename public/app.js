@@ -28,12 +28,9 @@ const sendChatBtn = document.getElementById('send-chat-btn');
 const chatMessages = document.getElementById('chat-messages');
 
 let myPeer = null;
-const myVideo = document.createElement('video');
-myVideo.muted = true;
-myVideo.setAttribute('playsinline', 'true');
-
+let myVideo = null;
 const peers = {};
-const userNames = {}; 
+let userNames = {}; 
 let myStream = null;
 let screenStream = null;
 let currentRoomId = '';
@@ -48,13 +45,23 @@ if (urlRoomId && urlRoomId !== "") {
     roomInput.value = urlRoomId;
 }
 
-// Mahalliy media oqimni olish (Kamera/Mikrofon)
-navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480, frameRate: 24 },
-    audio: true
-}).then(stream => {
-    myStream = stream;
-}).catch(err => console.error("Media qurilmalarga ulanib bo'lmadi:", err));
+// Kamerani faqat bir marta yuklash funksiyasi
+function initLocalStream() {
+    return new Promise((resolve, reject) => {
+        if (myStream) return resolve(myStream);
+        
+        navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, frameRate: 24 },
+            audio: true
+        }).then(stream => {
+            myStream = stream;
+            resolve(stream);
+        }).catch(err => {
+            console.error("Media qurilmalarga ulanib bo'lmadi:", err);
+            reject(err);
+        });
+    });
+}
 
 btnAccept.addEventListener('click', () => {
     if (pendingGuestSocketId) {
@@ -74,11 +81,10 @@ btnReject.addEventListener('click', () => {
 
 btnGuestClose.addEventListener('click', () => {
     guestModal.style.display = 'none';
-    joinBtn.innerText = "Uchrashuvga qo'shilish";
-    joinBtn.disabled = false;
+    resetMeetingState();
 });
 
-joinBtn.addEventListener('click', () => {
+joinBtn.addEventListener('click', async () => {
     const username = usernameInput.value.trim();
     const room = roomInput.value.trim();
 
@@ -92,35 +98,57 @@ joinBtn.addEventListener('click', () => {
     joinBtn.innerText = "Ulanmoqda...";
     joinBtn.disabled = true;
 
-    // Serverdan tozalangan TURN/STUN sozlamalarini olamiz
-    fetch('/ice-servers')
-        .then(res => res.json())
-        .then(iceServers => {
-            myPeer = new Peer(undefined, {
-                host: '/', 
-                port: '443', 
-                secure: true, 
-                path: '/peerjs',
-                config: { 
-                    iceServers: iceServers, 
-                    sdpSemantics: 'unified-plan',
-                    iceTransportPolicy: 'all' // Har qanday tarmoq uchun majburiy ulanish oqimi
-                }
-            });
+    try {
+        // Avval kamera va mikrofondan oqim olamiz
+        await initLocalStream();
 
-            myPeer.on('open', peerId => {
-                socket.emit('request-to-join', currentRoomId, currentUsername, peerId);
-            });
+        // Serverdan yangi tozalangan TURN/STUN sozlamalarini olamiz
+        const res = await fetch('/ice-servers');
+        const iceServers = await res.json();
 
-            setupApprovalLogic();
-        }).catch(err => {
-            console.error("ICE Server yuklash xatosi:", err);
-            joinBtn.disabled = false;
-            joinBtn.innerText = "Qaytadan urinish";
+        // Har safar kirganda toza yangi Peer obyekti yaratiladi
+        if (myPeer) {
+            myPeer.destroy();
+        }
+
+        myPeer = new Peer(undefined, {
+            host: '/', 
+            port: '443', 
+            secure: true, 
+            path: '/peerjs',
+            config: { 
+                iceServers: iceServers, 
+                sdpSemantics: 'unified-plan',
+                iceTransportPolicy: 'all'
+            }
         });
+
+        myPeer.on('open', peerId => {
+            // Soket orqali xonaga qo'shilish so'rovi yuboriladi
+            socket.emit('request-to-join', currentRoomId, currentUsername, peerId);
+        });
+
+        myPeer.on('error', err => {
+            console.error("PeerJS Xatolik yuz berdi:", err);
+            resetMeetingState();
+        });
+
+        setupApprovalLogic();
+
+    } catch (err) {
+        console.error("Ulanish jarayonida xato:", err);
+        alert("Kamera/Mikrofon yoki tarmoq xatosi tufayli ulanib bo'lmadi.");
+        resetMeetingState();
+    }
 });
 
 function setupApprovalLogic() {
+    // Eski tinglovchilarni tozalab, faqat bitta faol tinglovchi qoldiramiz
+    socket.off('join-approved');
+    socket.off('user-awaiting-status');
+    socket.off('join-rejected');
+    socket.off('user-awaiting');
+
     socket.on('join-approved', (data) => {
         if (data && data.isAdmin) iAmAdmin = true;
 
@@ -129,6 +157,11 @@ function setupApprovalLogic() {
         window.history.pushState({}, '', `/${currentRoomId}`);
         lobby.style.display = 'none';
         meetContainer.style.display = 'flex';
+
+        // O'zimiz uchun toza video element yaratamiz
+        myVideo = document.createElement('video');
+        myVideo.muted = true;
+        myVideo.setAttribute('playsinline', 'true');
 
         const myLabel = iAmAdmin ? `${currentUsername} (Admin) (Siz)` : `${currentUsername} (Siz)`;
         userNames[myPeer.id] = myLabel;
@@ -164,7 +197,11 @@ function setupApprovalLogic() {
 }
 
 function startMeetingLogics() {
-    // Kiruvchi RTC ulanishlariga javob qaytarish
+    socket.off('user-connected');
+    socket.off('user-disconnected');
+    socket.off('receive-chat-message');
+
+    // Kiruvchi RTC chaqiriqlariga javob berish
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
@@ -175,15 +212,19 @@ function startMeetingLogics() {
             addVideoStream(video, userVideoStream, nameToShow, call.peer);
             peers[call.peer] = call;
         });
+        
+        call.on('close', () => {
+            video.remove();
+        });
     });
 
-    // Yangi foydalanuvchi ulanganda uning ismini saqlab, aloqa o'rnatish
+    // Yangi foydalanuvchi ulanganda unga qo'ng'iroq qilish
     socket.on('user-connected', (userData) => {
         const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
         userNames[userData.userId] = guestLabel;
 
         setTimeout(() => {
-            if (myStream) {
+            if (myStream && myPeer && !myPeer.destroyed) {
                 const call = myPeer.call(userData.userId, isScreenSharing ? screenStream : myStream);
                 const video = document.createElement('video');
                 video.setAttribute('playsinline', 'true');
@@ -191,21 +232,29 @@ function startMeetingLogics() {
                 call.on('stream', userVideoStream => {
                     addVideoStream(video, userVideoStream, guestLabel, userData.userId);
                 });
+                
+                call.on('close', () => {
+                    video.remove();
+                });
+                
                 peers[userData.userId] = call;
             }
-        }, 1500); // Tarmoqlararo kechikishni hisobga olgan holda taymer oshirildi
+        }, 1500); 
     });
 
     socket.on('user-disconnected', userId => {
-        if (peers[userId]) peers[userId].close();
+        if (peers[userId]) {
+            peers[userId].close();
+            delete peers[userId];
+        }
         const element = document.getElementById(userId);
         if (element) element.remove();
         delete userNames[userId];
     });
 
-    // Chat logikasi
-    sendChatBtn.addEventListener('click', sendChatMessageAction);
-    chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessageAction(); });
+    // Chat
+    sendChatBtn.onclick = sendChatMessageAction;
+    chatInput.onkeydown = (e) => { if (e.key === 'Enter') sendChatMessageAction(); };
 
     socket.on('receive-chat-message', (data) => {
         const msgDiv = document.createElement('div');
@@ -215,14 +264,19 @@ function startMeetingLogics() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
-    // Boshqaruv hodisalari
-    micBtn.addEventListener('click', toggleMic);
-    camBtn.addEventListener('click', toggleCam);
-    screenBtn.addEventListener('click', toggleScreenShare);
-    chatBtn.addEventListener('click', () => {
+    // Boshqaruv elementlari hodisalari
+    micBtn.onclick = toggleMic;
+    camBtn.onclick = toggleCam;
+    screenBtn.onclick = toggleScreenShare;
+    chatBtn.onclick = () => {
         chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
-    });
-    leaveBtn.addEventListener('click', () => { window.location.href = '/'; });
+    };
+    
+    leaveBtn.onclick = () => {
+        // Tizimdan butunlay chiqish va holatni tozalash
+        socket.emit('disconnect');
+        resetMeetingState();
+    };
 }
 
 function sendChatMessageAction() {
@@ -233,6 +287,7 @@ function sendChatMessageAction() {
 }
 
 function toggleMic() {
+    if (!myStream) return;
     const audioTrack = myStream.getAudioTracks()[0];
     if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
@@ -242,6 +297,7 @@ function toggleMic() {
 }
 
 function toggleCam() {
+    if (!myStream) return;
     const videoTrack = myStream.getVideoTracks()[0];
     if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
@@ -258,7 +314,7 @@ function toggleScreenShare() {
             screenBtn.classList.add('active-off');
             
             replaceVideoTrack(screenStream.getVideoTracks()[0]);
-            myVideo.srcObject = screenStream;
+            if(myVideo) myVideo.srcObject = screenStream;
 
             screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
         }).catch(err => console.error("Ekran uzatib bo'lmadi:", err));
@@ -274,13 +330,15 @@ function stopScreenShare() {
     
     screenStream.getTracks().forEach(track => track.stop());
     replaceVideoTrack(myStream.getVideoTracks()[0]);
-    myVideo.srcObject = myStream;
+    if(myVideo) myVideo.srcObject = myStream;
 }
 
 function replaceVideoTrack(newTrack) {
     Object.values(peers).forEach(call => {
-        const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(newTrack);
+        if(call.peerConnection) {
+            const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(newTrack);
+        }
     });
 }
 
@@ -308,4 +366,42 @@ function addVideoStream(video, stream, name, userId) {
     videoBox.appendChild(video);
     videoBox.appendChild(nameLabel);
     videoGrid.appendChild(videoBox);
+}
+
+// Xonadan chiqqanda barcha RTC obyektlarni o'chiradigan funksiya
+function resetMeetingState() {
+    // 1. Ekran ulashni to'xtatish
+    if (isScreenSharing && screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+    }
+    isScreenSharing = false;
+    screenBtn.classList.remove('active-off');
+
+    // 2. Barcha mavjud qo'ng'iroqlarni yopish
+    Object.keys(peers).forEach(userId => {
+        if (peers[userId]) peers[userId].close();
+        delete peers[userId];
+    });
+
+    // 3. PeerJS instansiyasini butunlay yo'q qilish
+    if (myPeer) {
+        myPeer.destroy();
+        myPeer = null;
+    }
+
+    // 4. Grid oynasini tozalash
+    videoGrid.innerHTML = '';
+    chatMessages.innerHTML = '';
+    userNames = {};
+    iAmAdmin = false;
+
+    // 5. Interfeysni qaytarish
+    meetContainer.style.display = 'none';
+    lobby.style.display = 'block';
+    
+    joinBtn.innerText = "Uchrashuvga qo'shilish";
+    joinBtn.disabled = false;
+    
+    // URL manzilini tozalash
+    window.history.pushState({}, '', '/');
 }
