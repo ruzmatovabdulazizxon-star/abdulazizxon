@@ -1,64 +1,53 @@
 const socket = io('/');
 const videoGrid = document.getElementById('video-grid');
+const lobby = document.getElementById('lobby');
+const meetContainer = document.getElementById('meet-container');
+const joinBtn = document.getElementById('join-btn');
 
-// 1. XIRSYS YOKI METERED TURN SERVER CONFIGURATION
-// Skrinshotingizdagi ident va secret ma'lumotlari asosida to'g'ri sozlangan
 const peerConfiguration = {
     iceServers: [
-        { urls: 'urls: "stun:stun.l.google.com:19302"' }, // Bepul Google STUN
+        { urls: 'stun:stun.l.google.com:19302' },
         {
-            // O'zingizning TURN server ma'lumotlaringizni shu yerga aniq yozing:
             urls: 'turn:global.xirsys.com:3478?transport=udp',
-            username: 'abdulaziz', // Xirsys ident qismi
-            credential: 'c0a65ce0-8033-11f1-8a6c-f2f74e209366' // Xirsys secret qismi
+            username: 'abdulaziz', 
+            credential: 'c0a65ce0-8033-11f1-8a6c-f2f74e209366'
         },
         {
             urls: 'turn:global.xirsys.com:3478?transport=tcp',
             username: 'abdulaziz',
             credential: 'c0a65ce0-8033-11f1-8a6c-f2f74e209366'
         }
-    ],
-    iceCandidatePoolSize: 10 // Tarmoq ulanishini tezlashtirish uchun
+    ]
 };
 
-// Peer obyektini konfiguratsiya bilan yaratish
 const myPeer = new Peer(undefined, {
     host: '/',
-    port: '443', // Render platformasi HTTPS (443) portida ishlaydi
+    port: '443',
     secure: true,
     config: peerConfiguration
 });
 
 const myVideo = document.createElement('video');
-myVideo.muted = true; // O'z ovozimiz o'zimizga qaytib eshitilmasligi uchun
+myVideo.muted = true;
 myVideo.setAttribute('playsinline', 'true');
 
 const peers = {};
 let myStream = null;
+let currentRoomId = '';
+let currentUsername = '';
 
-// Kamerani olish va oqimni boshlash
+// Kamerani olish (Faqat Lobby'dan o'tgandan keyin ishlamay, oldindan tayyor turishi uchun)
 navigator.mediaDevices.getUserMedia({
-    video: {
-        width: { ideal: 640 },  // Mobil internetda qotmasligi uchun sifatni biroz pasaytiramiz
-        height: { ideal: 480 },
-        frameRate: { max: 24 }  // Tarmoq yukini kamaytirish uchun max 24fps
-    },
+    video: { width: 640, height: 480, frameRate: 24 },
     audio: true
 }).then(stream => {
     myStream = stream;
-    addVideoStream(myVideo, stream, 'Siz');
 
-    // Kimgadir qo'ng'iroq bo'lganda (Boshqa foydalanuvchi bizga ulanmoqchi bo'lsa)
     myPeer.on('call', call => {
-        // Biz ham o'z oqimimizni yuboramiz
         call.answer(stream);
-        
         const video = document.createElement('video');
         video.setAttribute('playsinline', 'true');
-
-        // MUHIM TUXATISH: Stream kelganda kutib olib, qotib qolishini oldini olish
         call.on('stream', userVideoStream => {
-            // Agar video allaqachon yaratilgan bo'lsa, qayta-qayta yaratmaslik
             if (!peers[call.peer]) {
                 addVideoStream(video, userVideoStream, 'Suhbatdosh');
                 peers[call.peer] = call;
@@ -66,62 +55,64 @@ navigator.mediaDevices.getUserMedia({
         });
     });
 
-    // Yangi foydalanuvchi xonaga qo'shilganda Socket orqali xabar olamiz
     socket.on('user-connected', userId => {
-        // 3-mehmon qo'shilganda ulanish asinxron tarzda biroz kutib amalga oshiriladi
-        // Bu tarmoqdagi "Race Condition" (ekran qotishi) muammosini hal qiladi
         setTimeout(() => {
             connectToNewUser(userId, stream);
-        }, 1000); 
+        }, 1000);
     });
 }).catch(err => {
-    console.error("Kamera yoki mikrofon topilmadi:", err);
+    console.error("Media xatolik:", err);
 });
 
-// Foydalanuvchi chiqib ketganda videoni o'chirish
-socket.on('user-disconnected', userId => {
-    if (peers[userId]) {
-        peers[userId].close();
-        delete peers[userId];
+// "Uchrashuvga qo'shilish" tugmasi bosilganda
+joinBtn.addEventListener('click', () => {
+    const usernameInput = document.getElementById('username-input').value.trim();
+    const roomInput = document.getElementById('room-input').value.trim();
+
+    if (!usernameInput || !roomInput) {
+        alert("Iltimos, ismingizni va xona ID raqamini kiriting!");
+        return;
     }
+
+    currentUsername = usernameInput;
+    currentRoomId = roomInput;
+
+    // Lobby oynasini yashirib, video maydonni ko'rsatish
+    lobby.style.display = 'none';
+    meetContainer.style.display = 'flex';
+
+    // O'z videomizni gridga qo'shish
+    if (myStream) {
+        addVideoStream(myVideo, myStream, `${currentUsername} (Siz)`);
+    }
+
+    // Serverga ulanish xabarini yuborish
+    socket.emit('join-room', currentRoomId, myPeer.id);
+});
+
+socket.on('user-disconnected', userId => {
+    if (peers[userId]) peers[userId].close();
     const element = document.getElementById(userId);
     if (element) element.remove();
 });
 
-// Yangi foydalanuvchiga ulanish funksiyasi
 function connectToNewUser(userId, stream) {
-    // Unga qo'ng'iroq qilamiz va o'z oqimimizni beramiz
     const call = myPeer.call(userId, stream);
     const video = document.createElement('video');
     video.setAttribute('playsinline', 'true');
-
     call.on('stream', userVideoStream => {
         addVideoStream(video, userVideoStream, 'Mehmon', userId);
     });
-
-    call.on('close', () => {
-        video.parentElement.remove();
-    });
-
     peers[userId] = call;
 }
 
-// Videoni DOM-ga qo'shish funksiyasi
 function addVideoStream(video, stream, name, userId = null) {
     video.srcObject = stream;
-    
-    // Video yuklangach ijro etilishini ta'minlash (Qotib qolishga qarshi)
     video.onloadedmetadata = () => {
-        video.play().catch(e => console.log("Video avtopley xatosi:", e));
+        video.play().catch(e => console.log(e));
     };
 
-    // Agar ushbu foydalanuvchi uchun element bo'lsa, eskisini yangilaymiz
-    const existBox = userId ? document.getElementById(userId) : null;
-    if (existBox) {
-        const oldVideo = existBox.querySelector('video');
-        if (oldVideo) oldVideo.srcObject = stream;
-        return;
-    }
+    if (userId && document.getElementById(userId)) return;
 
     const videoBox = document.createElement('div');
     videoBox.classList.add('video-box');
@@ -136,8 +127,9 @@ function addVideoStream(video, stream, name, userId = null) {
     videoGrid.appendChild(videoBox);
 }
 
-// Xonaga kirish logikasi (Sizning mavjud xonaga ulanish kodingizga moslang)
-myPeer.on('open', id => {
-    const roomId = document.getElementById('room-input')?.value || 'default-room';
-    socket.emit('join-room', roomId, id);
+// Chat funksiyasi ulash paneli
+const chatBtn = document.getElementById('chat-btn');
+const chatPanel = document.getElementById('chat-panel');
+chatBtn.addEventListener('click', () => {
+    chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
 });
