@@ -17,7 +17,6 @@ const roomAdmins = {};
 
 app.get('/ice-servers', async (req, res) => {
     try {
-        // Xirsys API'ga so'rov yuborish
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
@@ -27,33 +26,19 @@ app.get('/ice-servers', async (req, res) => {
         
         if (response.data && response.data.v && response.data.v.iceServers) {
             let rawServers = response.data.v.iceServers;
-            let formattedServers = [];
+            let formattedServers = Array.isArray(rawServers) ? rawServers.map(srv => ({
+                urls: srv.url || srv.urls,
+                username: srv.username || "",
+                credential: srv.credential || ""
+            })) : [];
 
-            // Agar u ichma-ich obyekt yoki massiv bo'lsa, uni to'liq tozalaymiz
-            if (Array.isArray(rawServers)) {
-                formattedServers = rawServers.map(srv => {
-                    let config = { urls: srv.url || srv.urls };
-                    if (srv.username) config.username = srv.username;
-                    if (srv.credential) config.credential = srv.credential;
-                    return config;
-                });
-            } else if (rawServers.iceServers) {
-                formattedServers = rawServers.iceServers;
-            }
-
-            // Google STUN serverini ham har ehtimolga qarshi qo'shib qo'yamiz
             formattedServers.push({ urls: "stun:stun.l.google.com:19302" });
             res.json(formattedServers);
         } else {
             res.json([{ urls: "stun:stun.l.google.com:19302" }]);
         }
     } catch (error) {
-        console.error("Xirsys API ulanish xatosi:", error.message);
-        // Agar Xirsys ishlamay qolsa, standart xizmatga qaytadi
-        res.json([
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-        ]);
+        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
 
@@ -65,18 +50,16 @@ io.on('connection', socket => {
     let currentRoom = null;
     let currentUserId = null;
 
-    socket.on('request-to-join', (roomId, username, peerId) => {
+    socket.on('request-to-join', (roomId, username) => {
         if (!roomAdmins[roomId]) {
             roomAdmins[roomId] = socket.id;
             socket.join(roomId);
             socket.emit('join-approved', { isAdmin: true });
         } else {
-            const adminSocketId = roomAdmins[roomId];
             socket.emit('user-awaiting-status');
-            io.to(adminSocketId).emit('user-awaiting', {
+            io.to(roomAdmins[roomId]).emit('user-awaiting', {
                 socketId: socket.id,
-                username: username,
-                peerId: peerId
+                username: username
             });
         }
     });
@@ -111,9 +94,7 @@ io.on('connection', socket => {
     socket.on('leave-room-signal', () => {
         if (currentRoom && currentUserId) {
             socket.to(currentRoom).emit('user-disconnected', currentUserId);
-            if (roomAdmins[currentRoom] === socket.id) {
-                delete roomAdmins[currentRoom];
-            }
+            if (roomAdmins[currentRoom] === socket.id) delete roomAdmins[currentRoom];
             socket.leave(currentRoom);
         }
     });
@@ -121,9 +102,7 @@ io.on('connection', socket => {
     socket.on('disconnect', () => {
         if (currentRoom && currentUserId) {
             socket.to(currentRoom).emit('user-disconnected', currentUserId);
-            if (roomAdmins[currentRoom] === socket.id) {
-                delete roomAdmins[currentRoom];
-            }
+            if (roomAdmins[currentRoom] === socket.id) delete roomAdmins[currentRoom];
         }
     });
 });
