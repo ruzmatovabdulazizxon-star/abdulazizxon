@@ -39,13 +39,11 @@ let iAmAdmin = false;
 let pendingGuestSocketId = null;
 let isScreenSharing = false;
 
-// URL manzilidan avtomatik Xona ID sini olish
 const urlRoomId = window.location.pathname.split('/')[1];
 if (urlRoomId && urlRoomId !== "") {
     roomInput.value = urlRoomId;
 }
 
-// Kamerani faqat bir marta yuklash funksiyasi
 function initLocalStream() {
     return new Promise((resolve, reject) => {
         if (myStream) return resolve(myStream);
@@ -99,14 +97,11 @@ joinBtn.addEventListener('click', async () => {
     joinBtn.disabled = true;
 
     try {
-        // Avval kamera va mikrofondan oqim olamiz
         await initLocalStream();
 
-        // Serverdan yangi TURN/STUN sozlamalarini olamiz
         const res = await fetch('/ice-servers');
         const iceServers = await res.json();
 
-        // Har safar kirganda eski peer ulanishini yo'q qilib, tozasini ochamiz
         if (myPeer) {
             myPeer.destroy();
         }
@@ -124,7 +119,6 @@ joinBtn.addEventListener('click', async () => {
         });
 
         myPeer.on('open', peerId => {
-            // Soket orqali xonaga qo'shilish so'rovi yuboriladi
             socket.emit('request-to-join', currentRoomId, currentUsername, peerId);
         });
 
@@ -143,7 +137,6 @@ joinBtn.addEventListener('click', async () => {
 });
 
 function setupApprovalLogic() {
-    // Eski soket tinglovchilarini tozalaymiz
     socket.off('join-approved');
     socket.off('user-awaiting-status');
     socket.off('join-rejected');
@@ -158,7 +151,6 @@ function setupApprovalLogic() {
         lobby.style.display = 'none';
         meetContainer.style.display = 'flex';
 
-        // O'zimiz uchun toza video element yaratamiz
         myVideo = document.createElement('video');
         myVideo.muted = true;
         myVideo.setAttribute('playsinline', 'true');
@@ -201,7 +193,6 @@ function startMeetingLogics() {
     socket.off('user-disconnected');
     socket.off('receive-chat-message');
 
-    // Kiruvchi RTC chaqiriqlariga javob berish
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
@@ -218,7 +209,6 @@ function startMeetingLogics() {
         });
     });
 
-    // Yangi foydalanuvchi ulanganda unga qo'ng'iroq qilish
     socket.on('user-connected', (userData) => {
         const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
         userNames[userData.userId] = guestLabel;
@@ -252,7 +242,6 @@ function startMeetingLogics() {
         delete userNames[userId];
     });
 
-    // Chat logikasi
     sendChatBtn.onclick = sendChatMessageAction;
     chatInput.onkeydown = (e) => { if (e.key === 'Enter') sendChatMessageAction(); };
 
@@ -264,7 +253,6 @@ function startMeetingLogics() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
-    // Tugmalar hodisalari
     micBtn.onclick = toggleMic;
     camBtn.onclick = toggleCam;
     screenBtn.onclick = toggleScreenShare;
@@ -272,9 +260,12 @@ function startMeetingLogics() {
         chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
     };
     
-    // Chiqish tugmasi hodisasi
+    // Tasdiqlash oynasini shu yerga qo'shdik
     leaveBtn.onclick = () => {
-        resetMeetingState();
+        const confirmLeave = confirm("Xonani rostdan ham tark etmoqchimisiz?");
+        if (confirmLeave) {
+            resetMeetingState();
+        }
     };
 }
 
@@ -367,22 +358,20 @@ function addVideoStream(video, stream, name, userId) {
     videoGrid.appendChild(videoBox);
 }
 
-// Chiqish va tozalash funksiyasi (Eng asosiysi)
 function resetMeetingState() {
-    // 1. Soket aloqasini majburiy uzish va tozalash
+    // Serverga xonadan butunlay chiqqanimiz haqida signal beramiz
     if (socket) {
+        socket.emit('leave-room-signal');
         socket.disconnect(); 
         socket.connect(); 
     }
 
-    // 2. Ekran ulash jarayoni faol bo'lsa to'xtatish
     if (isScreenSharing && screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
     }
     isScreenSharing = false;
     screenBtn.classList.remove('active-off');
 
-    // 3. Peer qo'ng'iroqlarini to'liq yopish
     Object.keys(peers).forEach(userId => {
         if (peers[userId]) {
             peers[userId].close();
@@ -390,26 +379,22 @@ function resetMeetingState() {
         delete peers[userId];
     });
 
-    // 4. PeerJS obyektini xotiradan butunlay o'chirish
     if (myPeer) {
         myPeer.destroy();
         myPeer = null;
     }
 
-    // 5. Grid konteyner va xotirani tozalash
     videoGrid.innerHTML = '';
     chatMessages.innerHTML = '';
     userNames = {};
     iAmAdmin = false;
     pendingGuestSocketId = null;
 
-    // 6. Interfeys holatini qaytarish
     meetContainer.style.display = 'none';
     lobby.style.display = 'block';
     
     joinBtn.innerText = "Uchrashuvga qo'shilish";
     joinBtn.disabled = false;
     
-    // URL manzilini boshlang'ich holatga qaytarish
     window.history.pushState({}, '', '/');
 }
