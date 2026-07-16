@@ -49,7 +49,7 @@ function initLocalStream() {
         if (myStream) return resolve(myStream);
         
         navigator.mediaDevices.getUserMedia({
-            video: { width: 640, height: 480, frameRate: 24 },
+            video: { width: 480, height: 360, frameRate: 20 }, // Mobil tarmoq uchun oqim yengillashtirildi
             audio: true
         }).then(stream => {
             myStream = stream;
@@ -106,6 +106,7 @@ joinBtn.addEventListener('click', async () => {
             myPeer.destroy();
         }
 
+        // TURN server ulanishlarini to'liq integratsiya qilish
         myPeer = new Peer(undefined, {
             host: '/', 
             port: '443', 
@@ -113,8 +114,8 @@ joinBtn.addEventListener('click', async () => {
             path: '/peerjs',
             config: { 
                 iceServers: iceServers, 
-                sdpSemantics: 'unified-plan',
-                iceTransportPolicy: 'all'
+                iceTransportPolicy: 'all', // Turli tarmoqlar o'rtasida ulanishni majburlash
+                sdpSemantics: 'unified-plan'
             }
         });
 
@@ -193,6 +194,7 @@ function startMeetingLogics() {
     socket.off('user-disconnected');
     socket.off('receive-chat-message');
 
+    // Kiruvchi chaqiriqlarga javob berish
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
@@ -209,10 +211,12 @@ function startMeetingLogics() {
         });
     });
 
+    // Yangi foydalanuvchi ulanganda unga qo'ng'iroq qilish
     socket.on('user-connected', (userData) => {
         const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
         userNames[userData.userId] = guestLabel;
 
+        // Mobil tarmoqlardagi sekinlashuvni hisobga olib, taymautni 2 soniya qildik
         setTimeout(() => {
             if (myStream && myPeer && !myPeer.destroyed) {
                 const call = myPeer.call(userData.userId, isScreenSharing ? screenStream : myStream);
@@ -229,7 +233,7 @@ function startMeetingLogics() {
                 
                 peers[userData.userId] = call;
             }
-        }, 1500); 
+        }, 2000); 
     });
 
     socket.on('user-disconnected', userId => {
@@ -260,7 +264,6 @@ function startMeetingLogics() {
         chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
     };
     
-    // Tasdiqlash oynasini shu yerga qo'shdik
     leaveBtn.onclick = () => {
         const confirmLeave = confirm("Xonani rostdan ham tark etmoqchimisiz?");
         if (confirmLeave) {
@@ -304,7 +307,7 @@ function toggleScreenShare() {
             screenBtn.classList.add('active-off');
             
             replaceVideoTrack(screenStream.getVideoTracks()[0]);
-            if(myVideo) myVideo.srcObject = screenStream;
+            if(myVideo) myVideo.srcObject = stream;
 
             screenStream.getVideoTracks()[0].onended = () => stopScreenShare();
         }).catch(err => console.error("Ekran uzatib bo'lmadi:", err));
@@ -359,7 +362,6 @@ function addVideoStream(video, stream, name, userId) {
 }
 
 function resetMeetingState() {
-    // Serverga xonadan butunlay chiqqanimiz haqida signal beramiz
     if (socket) {
         socket.emit('leave-room-signal');
         socket.disconnect(); 
