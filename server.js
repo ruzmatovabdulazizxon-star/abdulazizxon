@@ -3,115 +3,56 @@ const app = express();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const { ExpressPeerServer } = require('peer');
-const axios = require('axios'); // Faqat bir marta e'lon qilindi!
+const axios = require('axios');
 const path = require('path');
 
 const peerServer = ExpressPeerServer(server, {
     debug: true
 });
 
+// 1. Statik fayllarni birinchi bo'lib ro'yxatdan o'tkazamiz (Juda muhim!)
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/peerjs', peerServer);
 
-const roomsAdmin = {}; 
-const roomsUsers = {}; 
-
-app.get('*', (req, res, next) => {
-    // API so'rovlarini o'tkazib yuborish
-    if (req.path === '/ice-servers' || req.path.startsWith('/peerjs')) {
-        return next();
-    }
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// XIRSYS dan TURN/STUN serverlarni olish
+// 2. XIRSYS TURN/STUN server sozlamalarini olish api-liniyasi
 app.get('/ice-servers', async (req, res) => {
     try {
-        const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
+        const response = await axios.put('https://global.xirsys.com/_turn/MyFirstApp', {}, {
             headers: {
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
         });
-        
-        if (response.data && response.data.v && response.data.v.iceServers) {
-            console.log("Xirsys TURN serverlari muvaffaqiyatli olindi!");
-            res.json(response.data.v.iceServers);
-        } else {
-            res.json([{ urls: "stun:stun.l.google.com:19302" }]);
-        }
+        res.json(response.data.v);
     } catch (error) {
-        console.error("Xirsys ulanish xatosi:", error.message);
-        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        console.error("Xirsys API xatoligi:", error.message);
+        // Agar Xirsys ishlamay qolsa, zaxira sifatida Google STUN serverini qaytaramiz
+        res.json({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     }
 });
 
+// 3. Har qanday dinamik URL (masalan: /2 yoki /room-abc) kelganda index.html ni qaytarish
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// --- Socket.io Uchrashuv Logikasi ---
 io.on('connection', socket => {
-    socket.on('join-room', (roomId, userId, userName) => {
-        if (!roomsAdmin[roomId]) {
-            roomsAdmin[roomId] = socket.id;
-            socket.emit('admin-status', true);
-        } else {
-            socket.emit('admin-status', false);
-        }
-
+    socket.on('join-room', (roomId, userId) => {
+        // Foydalanuvchini ko'rsatilgan xona kanaliga kirgizish
         socket.join(roomId);
-
-        socket.on('request-join', () => {
-            const adminSocketId = roomsAdmin[roomId];
-            if (adminSocketId) {
-                io.to(adminSocketId).emit('join-request-received', {
-                    guestSocketId: socket.id,
-                    guestPeerId: userId,
-                    guestName: userName
-                });
-            } else {
-                socket.emit('join-approved');
-                registerUserAndNotify(roomId, userId, socket.id, userName);
-            }
-        });
-
-        socket.on('approve-guest', (guestSocketId, guestPeerId, guestName) => {
-            io.to(guestSocketId).emit('join-approved');
-            registerUserAndNotify(roomId, guestPeerId, guestSocketId, guestName);
-        });
-
-        socket.on('reject-guest', (guestSocketId) => {
-            io.to(guestSocketId).emit('join-rejected');
-        });
-
-        socket.on('send-chat-message', (message, senderName) => {
-            io.to(roomId).emit('receive-chat-message', message, senderName);
-        });
+        
+        // U bergan xonadagi boshqa barcha foydalanuvchilarga xabar berish
+        socket.to(roomId).emit('user-connected', userId);
 
         socket.on('disconnect', () => {
-            if (roomsUsers[roomId]) {
-                roomsUsers[roomId] = roomsUsers[roomId].filter(user => user.socketId !== socket.id);
-                socket.to(roomId).emit('user-disconnected', userId);
-            }
-            if (roomsAdmin[roomId] === socket.id) {
-                delete roomsAdmin[roomId];
-            }
+            socket.to(roomId).emit('user-disconnected', userId);
         });
     });
 });
 
-function registerUserAndNotify(roomId, userId, socketId, userName) {
-    if (!roomsUsers[roomId]) {
-        roomsUsers[roomId] = [];
-    }
-    
-    if (!roomsUsers[roomId].some(u => u.userId === userId)) {
-        roomsUsers[roomId].push({ userId, socketId, userName });
-    }
-
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-        const otherUsers = roomsUsers[roomId].filter(u => u.userId !== userId);
-        socket.emit('all-users', otherUsers);
-        socket.to(roomId).emit('user-connected', userId, userName);
-    }
-}
-
+// Render uchun dinamik port sozlamasi
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server ${PORT}-portda muvaffaqiyatli ishga tushdi.`);
+});
