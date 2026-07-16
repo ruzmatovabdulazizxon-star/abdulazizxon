@@ -17,6 +17,7 @@ const roomAdmins = {};
 
 app.get('/ice-servers', async (req, res) => {
     try {
+        // Xirsys API'ga so'rov yuborish
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
@@ -27,6 +28,8 @@ app.get('/ice-servers', async (req, res) => {
         if (response.data && response.data.v && response.data.v.iceServers) {
             let rawServers = response.data.v.iceServers;
             let formattedServers = [];
+
+            // Agar u ichma-ich obyekt yoki massiv bo'lsa, uni to'liq tozalaymiz
             if (Array.isArray(rawServers)) {
                 formattedServers = rawServers.map(srv => {
                     let config = { urls: srv.url || srv.urls };
@@ -37,13 +40,20 @@ app.get('/ice-servers', async (req, res) => {
             } else if (rawServers.iceServers) {
                 formattedServers = rawServers.iceServers;
             }
+
+            // Google STUN serverini ham har ehtimolga qarshi qo'shib qo'yamiz
+            formattedServers.push({ urls: "stun:stun.l.google.com:19302" });
             res.json(formattedServers);
         } else {
             res.json([{ urls: "stun:stun.l.google.com:19302" }]);
         }
     } catch (error) {
         console.error("Xirsys API ulanish xatosi:", error.message);
-        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        // Agar Xirsys ishlamay qolsa, standart xizmatga qaytadi
+        res.json([
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+        ]);
     }
 });
 
@@ -98,7 +108,6 @@ io.on('connection', socket => {
         });
     });
 
-    // Majburiy chiqib ketish signalini tinglash
     socket.on('leave-room-signal', () => {
         if (currentRoom && currentUserId) {
             socket.to(currentRoom).emit('user-disconnected', currentUserId);
