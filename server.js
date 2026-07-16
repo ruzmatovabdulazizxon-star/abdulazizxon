@@ -59,6 +59,9 @@ io.on('connection', socket => {
             // Agar xonada allaqachon admin bo'lsa, mehmonga kutish rejimini beramiz va adminga so'rov yuboramiz
             const adminSocketId = roomAdmins[roomId];
             
+            // Mehmonga o'zida kutish oynasini ochishi uchun signal beramiz
+            socket.emit('user-awaiting-status');
+
             // Adminga ruxsat so'rovi oynasini chiqarish uchun signal yuboramiz
             io.to(adminSocketId).emit('user-awaiting', {
                 socketId: socket.id,
@@ -106,7 +109,6 @@ io.on('connection', socket => {
     });
 });
 
-// Render platformasi va lokal port sozlamasi
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server ${PORT}-portda muvaffaqiyatli ishga tushdi.`);
