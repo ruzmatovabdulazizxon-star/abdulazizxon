@@ -2,8 +2,8 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zoom Professional Video Meeting</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zoom Pro Meeting</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" defer></script>
     <script src="/socket.io/socket.io.js" defer></script>
     <script src="app.js" defer></script>
@@ -12,7 +12,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: #0f1011;
+            background-color: #000000;
             color: white;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
@@ -29,8 +29,9 @@
             width: 90%;
             max-width: 400px;
             text-align: center;
+            z-index: 100;
         }
-        #lobby h2 { margin-bottom: 25px; font-size: 22px; }
+        #lobby h2 { margin-bottom: 25px; font-size: 22px; color: #fff; }
         .input-group { margin-bottom: 20px; text-align: left; }
         .input-group label { display: block; font-size: 11px; color: #a0a0a0; text-transform: uppercase; margin-bottom: 6px; }
         .input-group input { 
@@ -44,72 +45,57 @@
         }
         #join-btn:hover { background: #0b5cbe; }
         
-        #meet-container { display: none; width: 100vw; height: 100vh; flex-direction: row; }
-        #main-area { flex: 1; display: flex; flex-direction: column; height: 100%; position: relative; }
-        #video-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; padding: 20px; background: #141517; overflow-y: auto; align-content: center; justify-content: center; }
-        .video-box { position: relative; background: #232427; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
+        /* Video Oynasi */
+        #meet-container { display: none; width: 100vw; height: 100vh; flex-direction: column; overflow: hidden; position: relative; }
+        #upper-area { flex: 1; display: flex; width: 100%; height: calc(100vh - 80px); overflow: hidden; position: relative; }
+        
+        #video-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; padding: 12px; background: #000; overflow-y: auto; align-content: center; justify-content: center; width: 100%; }
+        .video-box { position: relative; background: #1e1e1e; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .name-label { position: absolute; bottom: 12px; left: 12px; background: rgba(0, 0, 0, 0.65); padding: 5px 12px; border-radius: 6px; font-size: 13px; z-index: 10; }
+        .name-label { position: absolute; bottom: 8px; left: 8px; background: rgba(0, 0, 0, 0.6); padding: 4px 10px; border-radius: 4px; font-size: 12px; z-index: 5; }
         
-        #control-bar { height: 85px; background: #1c1e21; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #2d3135; }
-        .control-btn { background: #2d3135; border: none; width: 52px; height: 52px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .control-btn:hover { background: #3e444a; }
-        .leave-btn { background: #e74c3c; border-radius: 8px; width: auto; padding: 0 22px; font-weight: bold; font-size: 15px; }
+        /* Control Bar */
+        #control-bar { height: 80px; background: #141414; display: flex; justify-content: center; align-items: center; gap: 12px; border-top: 1px solid #232323; width: 100%; z-index: 20; }
+        .control-btn { background: #242424; border: none; width: 48px; height: 48px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: 0.2s; }
+        .control-btn:hover { background: #3a3a3a; }
+        .control-btn.active-off { background: #e74c3c !important; }
+        .leave-btn { background: #e74c3c; border-radius: 6px; width: auto; padding: 0 16px; font-weight: bold; font-size: 14px; }
         
-        #chat-panel { width: 350px; background: #1c1e21; border-left: 1px solid #2d3135; display: none; flex-direction: column; height: 100%; }
-        .chat-header { padding: 20px; border-bottom: 1px solid #2d3135; font-weight: 600; }
-        #chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .message { background: #2d3135; padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; }
-        .chat-input-area { padding: 20px; display: flex; gap: 10px; border-top: 1px solid #2d3135; }
-        #chat-input { flex: 1; padding: 12px; background: #2d3135; border: none; border-radius: 8px; color: white; outline: none; }
-        #send-chat-btn { background: #0e71eb; border: none; color: white; padding: 0 16px; border-radius: 8px; cursor: pointer; }
+        /* Chat Paneli */
+        #chat-panel { width: 320px; background: #141414; border-left: 1px solid #232323; display: none; flex-direction: column; height: 100%; z-index: 30; }
+        .chat-header { padding: 15px; border-bottom: 1px solid #232323; font-weight: 600; font-size: 15px; text-align: center; }
+        #chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .message { background: #242424; padding: 8px 12px; border-radius: 8px; max-width: 90%; font-size: 13px; line-height: 1.4; word-break: break-word; }
+        .message b { color: #0e71eb; display: block; font-size: 11px; margin-bottom: 2px; }
+        .chat-input-area { padding: 12px; display: flex; gap: 8px; border-top: 1px solid #232323; background: #141414; }
+        #chat-input { flex: 1; padding: 10px; background: #242424; border: 1px solid #333; border-radius: 6px; color: white; outline: none; font-size: 14px; }
+        #send-chat-btn { background: #0e71eb; border: none; color: white; padding: 0 14px; border-radius: 6px; cursor: pointer; }
 
-        /* Zoom uslubidagi chiroyli modallar */
-        .zoom-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.75);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        .zoom-modal {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 24px;
-            width: 350px;
-            text-align: center;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-            color: #fff;
-            animation: zoomIn 0.2s ease-out;
-        }
-        @keyframes zoomIn {
-            from { transform: scale(0.9); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .modal-title { margin-top: 0; font-size: 18px; font-weight: 600; color: #fff; border-bottom: 1px solid #333; padding-bottom: 12px; }
-        .modal-body { font-size: 14px; color: #ccc; margin: 20px 0; line-height: 1.5; }
-        .modal-actions { display: flex; justify-content: space-around; gap: 12px; }
-        .modal-btn { flex: 1; padding: 10px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        .btn-success { background-color: #0e72ed; color: white; }
-        .btn-success:hover { background-color: #0056b3; }
-        .btn-danger { background-color: #e02424; color: white; }
-        .btn-danger:hover { background-color: #b81d1d; }
-        .btn-secondary { background-color: #333; color: white; }
-        .btn-secondary:hover { background-color: #444; }
+        /* Modallar */
+        .zoom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        .zoom-modal { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; width: 90%; max-width: 340px; text-align: center; }
+        .modal-title { font-size: 16px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .modal-body { font-size: 13px; color: #ccc; margin: 15px 0; }
+        .modal-actions { display: flex; gap: 10px; }
+        .modal-btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
+        .btn-success { background: #0e72ed; color: white; }
+        .btn-danger { background: #e02424; color: white; }
+        .btn-secondary { background: #333; color: white; }
 
+        /* TELEFONLAR UCHUN MAXSUS RESPONSIVE (3-rasmdagi noqulaylikni to'g'rilash) */
         @media (max-width: 768px) {
-            #meet-container { flex-direction: column; }
-            #video-grid { grid-template-columns: 1fr !important; padding: 10px; }
-            .video-box { aspect-ratio: 4/3; max-height: 35vh; }
-            #control-bar { height: 75px; gap: 10px; }
-            .control-btn { width: 44px; height: 44px; font-size: 15px; }
-            #chat-panel { width: 100%; height: 40vh; border-left: none; border-top: 1px solid #2d3135; }
+            #upper-area { flex-direction: column; }
+            #video-grid { grid-template-columns: 1fr 1fr !important; grid-auto-rows: min-content; gap: 6px; padding: 6px; }
+            .video-box { aspect-ratio: 1/1; } /* Telefonda kvadrat shaklda ixcham turadi */
+            #control-bar { height: 70px; gap: 8px; padding: 0 10px; }
+            .control-btn { width: 42px; height: 42px; font-size: 14px; }
+            .leave-btn { padding: 0 10px; font-size: 12px; height: 42px; display: flex; align-items: center; }
+            
+            /* Telefonda Chat videoni to'sib qo'ymasligi uchun overlay bo'lib tepadan ochiladi */
+            #chat-panel { 
+                position: absolute; top: 0; left: 0; width: 100%; height: calc(100% - 70px); 
+                z-index: 50; border-left: none; 
+            }
         }
     </style>
 </head>
@@ -129,33 +115,35 @@
     </div>
 
     <div id="meet-container">
-        <div id="main-area">
+        <div id="upper-area">
             <div id="video-grid"></div>
-            <div id="control-bar">
-                <button class="control-btn" id="mic-btn"><i class="fa fa-microphone"></i></button>
-                <button class="control-btn" id="cam-btn"><i class="fa fa-video"></i></button>
-                <button class="control-btn" id="chat-btn"><i class="fa fa-comment"></i></button>
-                <button class="control-btn leave-btn" id="leave-btn"><i class="fa fa-sign-out-alt"></i> Chiqish</button>
+            
+            <div id="chat-panel">
+                <div class="chat-header">Xona Chati</div>
+                <div id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Xabar yozing...">
+                    <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
+                </div>
             </div>
         </div>
 
-        <div id="chat-panel">
-            <div class="chat-header">Xona Chati</div>
-            <div id="chat-messages"></div>
-            <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="Xabar yozing...">
-                <button id="send-chat-btn"><i class="fa fa-paper-plane"></i></button>
-            </div>
+        <div id="control-bar">
+            <button class="control-btn" id="mic-btn"><i class="fa fa-microphone"></i></button>
+            <button class="control-btn" id="cam-btn"><i class="fa fa-video"></i></button>
+            <button class="control-btn" id="screen-btn"><i class="fa fa-desktop"></i></button>
+            <button class="control-btn" id="chat-btn"><i class="fa fa-comment"></i></button>
+            <button class="control-btn leave-btn" id="leave-btn"><i class="fa fa-sign-out-alt"></i> Chiqish</button>
         </div>
     </div>
 
     <div id="admin-modal" class="zoom-modal-overlay">
         <div class="zoom-modal">
             <h3 class="modal-title">Xonaga kirish so'rovi</h3>
-            <p id="modal-message" class="modal-body">Foydalanuvchi uchrashuvga kirishga ruxsat so'ramoqda.</p>
+            <p id="modal-message" class="modal-body"></p>
             <div class="modal-actions">
                 <button id="btn-reject" class="modal-btn btn-danger">Taqiqlash</button>
-                <button id="btn-accept" class="modal-btn btn-success">Ruxsat berish</button>
+                <button id="btn-accept" class="modal-btn btn-success">Ruxsat</button>
             </div>
         </div>
     </div>
@@ -163,7 +151,7 @@
     <div id="guest-modal" class="zoom-modal-overlay">
         <div class="zoom-modal">
             <h3 id="guest-modal-title" class="modal-title">Kutish zali</h3>
-            <p id="guest-modal-message" class="modal-body">Xona egasi (Admin) tomonidan ruxsat berilishi kutilmoqda...</p>
+            <p id="guest-modal-message" class="modal-body">Admin ruxsati kutilmoqda...</p>
             <div class="modal-actions">
                 <button id="btn-guest-close" class="modal-btn btn-secondary" style="display: none;">Yopish</button>
             </div>
