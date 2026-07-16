@@ -100,29 +100,20 @@ function setupApprovalLogic() {
         meetContainer.style.display = 'flex';
 
         try {
-            // Kamerani ishga tushirish (Mobil telefonlar uchun moslashtirilgan video rezolyutsiyasi)
+            // Kamerani ishga tushirish (Optima rezolyutsiya)
             myStream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    width: { ideal: 640 }, 
-                    height: { ideal: 480 }, 
-                    frameRate: { ideal: 20 } 
-                },
+                video: { width: 640, height: 480, frameRate: 24 },
                 audio: true
             });
 
-            // Xirsys TURN serverlarini olish
-            const res = await fetch('/ice-servers');
-            const iceServers = await res.json();
-
-            // PeerJS obyektini to'g'ri TURN serverlar bilan sozlash
+            // DIQQAT: PeerJS Rasmiy Global Bulutli serveriga ulanamiz! (Render muammolaridan qutulamiz)
             myPeer = new Peer(undefined, {
-                host: '/',
-                port: '443',
-                secure: true,
-                path: '/peerjs',
-                config: { 
-                    iceServers: iceServers,
-                    iceCandidatePoolSize: 10
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' }
+                    ]
                 }
             });
 
@@ -140,13 +131,13 @@ function setupApprovalLogic() {
             });
 
             myPeer.on('error', err => {
-                console.error("PeerJS Error:", err);
+                console.error("PeerJS Cloud Error:", err);
                 resetMeetingState();
             });
 
         } catch (err) {
-            console.error("Kamera/Mikrofon xatosi:", err);
-            alert("Kamera yoki mikrofonga ruxsat berilmadi yoki u band!");
+            console.error(err);
+            alert("Kamera yoki mikrofonga ruxsat berilmadi!");
             resetMeetingState();
         }
     });
@@ -178,7 +169,7 @@ function startMeetingLogics() {
     socket.off('user-disconnected');
     socket.off('receive-chat-message');
 
-    // Kiruvchi qo'ng'iroqlarga javob berish
+    // Chaqiriqlarga javob berish
     myPeer.on('call', call => {
         call.answer(isScreenSharing ? screenStream : myStream);
         const video = document.createElement('video');
@@ -191,12 +182,11 @@ function startMeetingLogics() {
         });
     });
 
-    // Yangi foydalanuvchi ulanishi
+    // Yangi ulanish
     socket.on('user-connected', (userData) => {
         const guestLabel = userData.isAdmin ? `${userData.username} (Admin)` : userData.username;
         userNames[userData.userId] = guestLabel;
 
-        // Ulanish barqaror bo'lishi uchun kichik kechikish bilan call qilamiz
         setTimeout(() => {
             if (myStream && myPeer && !myPeer.destroyed) {
                 const call = myPeer.call(userData.userId, isScreenSharing ? screenStream : myStream);
