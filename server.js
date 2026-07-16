@@ -15,10 +15,12 @@ app.use('/peerjs', peerServer);
 
 const roomAdmins = {}; 
 
+// XIRSYS INTEGRATSIYASI - TO'G'RI FORMATLASH
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
             headers: {
+                // Xirsys Dashboard'dagi ma'lumotlaringiz asosida yaratilgan Base64 avtorizatsiya
                 "Authorization": "Basic " + Buffer.from("abdulaziz:c0a65ce0-8033-11f1-8a6c-f2f74e209366").toString("base64"),
                 "Content-Type": "application/json"
             }
@@ -26,19 +28,34 @@ app.get('/ice-servers', async (req, res) => {
         
         if (response.data && response.data.v && response.data.v.iceServers) {
             let rawServers = response.data.v.iceServers;
-            let formattedServers = Array.isArray(rawServers) ? rawServers.map(srv => ({
-                urls: srv.url || srv.urls,
-                username: srv.username || "",
-                credential: srv.credential || ""
-            })) : [];
+            
+            // PeerJS formatiga moslash: 'urls' va 'url' kalitlarini sinxronlash
+            let formattedServers = rawServers.map(srv => {
+                const urlList = srv.url || srv.urls;
+                return {
+                    urls: Array.isArray(urlList) ? urlList : [urlList],
+                    username: srv.username || "",
+                    credential: srv.credential || ""
+                };
+            });
 
-            formattedServers.push({ urls: "stun:stun.l.google.com:19302" });
+            // Google bepul STUN serverini ham zaxira sifatida qo'shamiz
+            formattedServers.push({ urls: ["stun:stun.l.google.com:19302"] });
+            
             res.json(formattedServers);
         } else {
-            res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+            // Agar Xirsys ishlamay qolsa, zaxira bepul serverlar
+            res.json([
+                { urls: ["stun:stun.l.google.com:19302"] },
+                { urls: ["stun:stun1.l.google.com:19302"] }
+            ]);
         }
     } catch (error) {
-        res.json([{ urls: "stun:stun.l.google.com:19302" }]);
+        console.error("Xirsys API Error, Google STUN serverlariga qaytildi:", error.message);
+        res.json([
+            { urls: ["stun:stun.l.google.com:19302"] },
+            { urls: ["stun:stun1.l.google.com:19302"] }
+        ]);
     }
 });
 
