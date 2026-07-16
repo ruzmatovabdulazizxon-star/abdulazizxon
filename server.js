@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const roomAdmins = {}; 
 
-// Xirsys TURN serverlarini olish uchun backend yo'li
+// Xirsys yoki bepul STUN xizmati
 app.get('/ice-servers', async (req, res) => {
     try {
         const response = await axios.put('https://global.xirsys.net/_turn/MyFirstApp', {}, {
@@ -26,15 +26,12 @@ app.get('/ice-servers', async (req, res) => {
                 username: srv.username || "",
                 credential: srv.credential || ""
             }));
-
-            // Google STUN ham qo'shiladi
             formattedServers.push({ urls: "stun:stun.l.google.com:19302" });
             res.json(formattedServers);
         } else {
             res.json([{ urls: "stun:stun.l.google.com:19302" }]);
         }
     } catch (error) {
-        console.error("Xirsys ulanish xatosi:", error.message);
         res.json([{ urls: "stun:stun.l.google.com:19302" }]);
     }
 });
