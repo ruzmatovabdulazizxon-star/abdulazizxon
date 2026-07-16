@@ -3,7 +3,10 @@ const videoGrid = document.getElementById('video-grid');
 const lobby = document.getElementById('lobby');
 const meetContainer = document.getElementById('meet-container');
 const joinBtn = document.getElementById('join-btn');
+const usernameInput = document.getElementById('username-input');
+const roomInput = document.getElementById('room-input');
 
+// Xirsys STUN/TURN serverlar konfiguratsiyasi
 const peerConfiguration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -36,7 +39,14 @@ let myStream = null;
 let currentRoomId = '';
 let currentUsername = '';
 
-// Kamerani olish (Faqat Lobby'dan o'tgandan keyin ishlamay, oldindan tayyor turishi uchun)
+// --- URL'dan Xona ID'sini avtomatik o'qib olish logikasi ---
+// Agar foydalanuvchi havola orqali kirsa (masalan: /2), xona inputiga avtomatik '2' yoziladi
+const urlRoomId = window.location.pathname.split('/')[1];
+if (urlRoomId && urlRoomId !== "") {
+    roomInput.value = urlRoomId;
+}
+
+// Kamera va mikrofonni oldindan tayyorlash
 navigator.mediaDevices.getUserMedia({
     video: { width: 640, height: 480, frameRate: 24 },
     audio: true
@@ -61,32 +71,36 @@ navigator.mediaDevices.getUserMedia({
         }, 1000);
     });
 }).catch(err => {
-    console.error("Media xatolik:", err);
+    console.error("Media qurilmalarga ulanishda xatolik:", err);
 });
 
 // "Uchrashuvga qo'shilish" tugmasi bosilganda
 joinBtn.addEventListener('click', () => {
-    const usernameInput = document.getElementById('username-input').value.trim();
-    const roomInput = document.getElementById('room-input').value.trim();
+    const username = usernameInput.value.trim();
+    const room = roomInput.value.trim();
 
-    if (!usernameInput || !roomInput) {
+    if (!username || !room) {
         alert("Iltimos, ismingizni va xona ID raqamini kiriting!");
         return;
     }
 
-    currentUsername = usernameInput;
-    currentRoomId = roomInput;
+    currentUsername = username;
+    currentRoomId = room;
+
+    // --- Havolani (URL) dinamik o'zgartirish ---
+    // Brauzer satrini "abdulazizxon.onrender.com/2" ko'rinishiga o'tkazadi
+    window.history.pushState({}, '', `/${currentRoomId}`);
 
     // Lobby oynasini yashirib, video maydonni ko'rsatish
     lobby.style.display = 'none';
     meetContainer.style.display = 'flex';
 
-    // O'z videomizni gridga qo'shish
+    // O'z videomizni ekranga chiqarish
     if (myStream) {
         addVideoStream(myVideo, myStream, `${currentUsername} (Siz)`);
     }
 
-    // Serverga ulanish xabarini yuborish
+    // Serverga ulanish signalini yuborish
     socket.emit('join-room', currentRoomId, myPeer.id);
 });
 
@@ -127,9 +141,11 @@ function addVideoStream(video, stream, name, userId = null) {
     videoGrid.appendChild(videoBox);
 }
 
-// Chat funksiyasi ulash paneli
+// Chat paneli boshqaruvi
 const chatBtn = document.getElementById('chat-btn');
 const chatPanel = document.getElementById('chat-panel');
-chatBtn.addEventListener('click', () => {
-    chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
-});
+if (chatBtn && chatPanel) {
+    chatBtn.addEventListener('click', () => {
+        chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
+    });
+}
