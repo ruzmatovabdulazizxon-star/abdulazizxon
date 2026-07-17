@@ -1,6 +1,6 @@
 const socket = io();
 
-// HTML elementlarini bog'lash
+// HTML elementlari
 const lobby = document.getElementById('lobby');
 const usernameInput = document.getElementById('username');
 const roomIdInput = document.getElementById('room-id');
@@ -11,6 +11,11 @@ const meetContainer = document.getElementById('meet-container');
 const leaveBtn = document.getElementById('leave-btn');
 const videoGrid = document.getElementById('video-grid');
 
+// Boshqaruv paneli elementlari
+const toggleMicBtn = document.getElementById('toggle-mic-btn');
+const toggleCamBtn = document.getElementById('toggle-cam-btn');
+const shareScreenBtn = document.getElementById('share-screen-btn');
+
 const adminModal = document.getElementById('admin-modal');
 const requestingUserSpan = document.getElementById('requesting-user');
 const acceptBtn = document.getElementById('accept-btn');
@@ -20,6 +25,11 @@ const guestModal = document.getElementById('guest-modal');
 
 let roomInstance = null;
 let currentPendingUser = null;
+
+// Holatlarni saqlash
+let isMicEnabled = true;
+let isCamEnabled = true;
+let isScreenSharing = false;
 
 // KIRISH TUGMASI
 joinBtn.addEventListener('click', () => {
@@ -40,14 +50,13 @@ joinBtn.addEventListener('click', () => {
     }
 });
 
-// ADMIN UCHUN: So'rov kelganda
+// ADMIN EVENTLARI
 socket.on('join-request-received', ({ socketId, username }) => {
     currentPendingUser = socketId;
     requestingUserSpan.innerText = username;
     adminModal.classList.remove('hidden');
 });
 
-// ADMIN QABUL QILGANDA
 acceptBtn.addEventListener('click', () => {
     if (currentPendingUser) {
         socket.emit('admin-decision', { socketId: currentPendingUser, decision: 'accept' });
@@ -56,7 +65,6 @@ acceptBtn.addEventListener('click', () => {
     }
 });
 
-// ADMIN RAD ETGANDA
 rejectBtn.addEventListener('click', () => {
     if (currentPendingUser) {
         socket.emit('admin-decision', { socketId: currentPendingUser, decision: 'reject' });
@@ -65,7 +73,6 @@ rejectBtn.addEventListener('click', () => {
     }
 });
 
-// MEHMON UCHUN: Qaror kelganda
 socket.on('join-decision', ({ decision, message }) => {
     guestModal.classList.add('hidden');
     if (decision === 'accept') {
@@ -77,31 +84,32 @@ socket.on('join-decision', ({ decision, message }) => {
     }
 });
 
-// LIVEKITGA ULANISH VA KAMERANI CHIQARISH
+// LIVEKITGA ULANISH VA ASOSIY MANTIQ
 socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
     lobby.classList.add('hidden');
     meetContainer.classList.remove('hidden');
     document.getElementById('active-room-title').innerText = roomId;
 
     try {
-        const LK = window.LiveKitClient || window.LiveKit;
+        // Global LiveKit obyektini aniqlash (Har ikkala CDN varianti uchun kafolatlangan uslub)
+        const LK = window.LiveKit || (window.LiveKitClient ? window.LiveKitClient : null);
         if (!LK) {
-            throw new Error("LiveKit topilmadi!");
+            throw new Error("LiveKit kutubxonasi brauzerda topilmadi! Sahifani Ctrl+F5 qiling.");
         }
 
         roomInstance = new LK.Room();
         
-        // BOSHQALARNING KAMERASI ULANGANDA TIFLASH
+        // Boshqa foydalanuvchilar kamerasi ulanganda
         roomInstance.on(LK.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 const element = track.attach();
-                element.className = "w-full h-[300px] md:h-full object-cover rounded-lg border-2 border-gray-700 bg-black";
+                element.className = "w-full h-full object-cover rounded-lg border-2 border-gray-700 bg-black";
                 element.id = `video-${participant.identity}`;
                 videoGrid.appendChild(element);
             }
         });
 
-        // BOSHQALAR CHIQIB KETGANDA O'CHIRISH
+        // Boshqalar kamerani o'chirishganda yoki chiqishganda
         roomInstance.on(LK.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 track.detach();
@@ -110,30 +118,68 @@ socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
             }
         });
 
-        // SERVERGA ULANISH
+        // Serverga ulanish
         await roomInstance.connect(livekitUrl, token);
-        console.log("LiveKit-ga muvaffaqiyatli ulandi!");
 
-        // KAMERA VA MIKROFONNI YOQISH
+        // Kamera va mikrofonni dastlabki faollashtirish
         await roomInstance.localParticipant.enableCameraAndMicrophone();
 
-        // O'ZIMIZNING KAMERAMIZNI EKRANGA CHIQARISH (TO'G'RILANGAN VARIANT)
+        // O'z kameramiz oqimini ekranda joylashtirish
         const localVideoTrack = roomInstance.localParticipant.getTrack(LK.Track.Source.Camera);
         if (localVideoTrack && localVideoTrack.videoTrack) {
             const localElement = localVideoTrack.videoTrack.attach();
-            localElement.className = "w-full h-[300px] md:h-full object-cover rounded-lg border-2 border-blue-500 bg-black";
-            // O'z ovozimiz o'zimizga qayta eshitilmasligi uchun muted qilamiz
-            localElement.muted = true; 
+            localElement.className = "w-full h-full object-cover rounded-lg border-2 border-blue-500 bg-black";
+            localElement.id = "my-local-video";
+            localElement.muted = true; // O'z ovozimiz o'zimizga eshitilmasligi uchun
             videoGrid.appendChild(localElement);
         }
 
+        // --- TUGMALARNI BOSHQARISH FUNKSIYALARI ---
+
+        // MIKROFONNI YOQISH / O'CHIRISH
+        toggleMicBtn.onclick = async () => {
+            isMicEnabled = !isMicEnabled;
+            await roomInstance.localParticipant.setMicrophoneEnabled(isMicEnabled);
+            toggleMicBtn.innerHTML = isMicEnabled ? "🎤 Mik: Yoqilgan" : "🔇 Mik: O'chirilgan";
+            toggleMicBtn.className = isMicEnabled ? "px-5 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition duration-200 shadow-md" : "px-5 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition duration-200 shadow-md";
+        };
+
+        // KAMERANI YOQISH / O'CHIRISH
+        toggleCamBtn.onclick = async () => {
+            isCamEnabled = !isCamEnabled;
+            await roomInstance.localParticipant.setCameraEnabled(isCamEnabled);
+            toggleCamBtn.innerHTML = isCamEnabled ? "📷 Kam: Yoqilgan" : "📸 Kam: O'chirilgan";
+            toggleCamBtn.className = isCamEnabled ? "px-5 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition duration-200 shadow-md" : "px-5 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition duration-200 shadow-md";
+            
+            const myVideo = document.getElementById("my-local-video");
+            if (!isCamEnabled && myVideo) {
+                myVideo.style.opacity = "0.2"; // Kamera o'chganda xiralashtirish
+            } else if (myVideo) {
+                myVideo.style.opacity = "1";
+            }
+        };
+
+        // EKRAN ULASHISH (SCREEN SHARE)
+        shareScreenBtn.onclick = async () => {
+            try {
+                isScreenSharing = !isScreenSharing;
+                await roomInstance.localParticipant.setScreenShareEnabled(isScreenSharing);
+                shareScreenBtn.innerHTML = isScreenSharing ? "🛑 Ulashishni to'xtatish" : "🖥️ Ekran ulashish";
+                shareScreenBtn.className = isScreenSharing ? "px-5 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition duration-200 shadow-md" : "px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition duration-200 shadow-md";
+            } catch (err) {
+                console.error("Ekran ulashishda xato:", err);
+                isScreenSharing = false;
+                shareScreenBtn.innerHTML = "🖥️ Ekran ulashish";
+            }
+        };
+
     } catch (error) {
-        console.error("LiveKit xatoligi:", error);
-        alert("Video ulanishda xato: " + error.message);
+        console.error("Ulanish xatosi:", error);
+        alert("Video xonaga ulanib bo'lmadi: " + error.message);
     }
 });
 
-// CHIQUV TUGMASI
+// CHIQISH TUGMASI
 leaveBtn.addEventListener('click', async () => {
     if (roomInstance) {
         await roomInstance.disconnect();
