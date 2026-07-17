@@ -14,14 +14,11 @@ const io = new Server(httpServer, {
     }
 });
 
-// __dirname ni ES Modules muhitida olish
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Statik fayllarni 'public' papkasidan xizmat qildirish
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Bosh sahifa uchun public/index.html ni yuboramiz
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -36,7 +33,6 @@ const activeRooms = {};
 io.on('connection', (socket) => {
     console.log('Foydalanuvchi ulandi:', socket.id);
 
-    // Mehmon ulanishni so'raganda
     socket.on('request-join', ({ roomId, username }) => {
         const adminSocketId = activeRooms[roomId];
         if (adminSocketId) {
@@ -49,7 +45,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Admin mehmon bo'yicha qaror berganda
     socket.on('admin-decision', ({ socketId, decision }) => {
         io.to(socketId).emit('join-decision', { 
             decision, 
@@ -57,19 +52,29 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Xonaga kirish mantiqi va LiveKit token generatsiyasi
     socket.on('join-room', async ({ roomId, username, role }) => {
         if (role === 'admin') {
             activeRooms[roomId] = socket.id;
         }
 
         try {
-            // LiveKit Token tayyorlash
+            // MUHIM TUXATISH: Ismlar takrorlanmasligi va xato bermasligi uchun 
+            // identity oxiriga unikal socket.id ni qo'shib qo'yamiz.
+            const uniqueIdentity = `${username}_${socket.id.substring(0, 5)}`;
+
             const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-                identity: username,
+                identity: uniqueIdentity,
             });
-            at.addGrant({ roomJoin: true, room: roomId, canPublish: true, canSubscribe: true });
-            const token = await at.toJwt(); // ES Module formatida asinxron ishlashi ishonchliroq
+            
+            at.addGrant({ 
+                roomJoin: true, 
+                room: roomId.toString(), // ID string holatida bo'lishi shart
+                canPublish: true, 
+                canSubscribe: true 
+            });
+            
+            // Tokenni string formatida olamiz
+            const token = at.toJwt(); 
 
             socket.emit('token-ready', {
                 token,
@@ -82,11 +87,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // Agar xonani ochgan admin chiqib ketsa, uni activeRooms ro'yxatidan o'chiramiz
         for (const [roomId, socketId] of Object.entries(activeRooms)) {
             if (socketId === socket.id) {
                 delete activeRooms[roomId];
-                console.log(`Xona yopildi (Admin chiqdi): ${roomId}`);
+                console.log(`Xona yopildi: ${roomId}`);
             }
         }
         console.log('Foydalanuvchi uzildi:', socket.id);
