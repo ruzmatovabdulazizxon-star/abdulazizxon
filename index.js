@@ -20,12 +20,12 @@ const io = new Server(httpServer, {
     }
 });
 
-// Hech qanday qo'shimcha 'src'siz statik fayllarni xizmat qilamiz
-app.use(express.static(__dirname));
+// Statik fayllarni 'public' papkasi ichidan tarqatamiz
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Bosh sahifaga kelgan so'rovga xuddi shu 'index.js' turgan papkadagi 'index.html'ni to'g'ridan-to'g'ri yuboramiz
+// Bosh sahifada 'public' ichidagi index.html faylini ko'rsatamiz
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const PORT = process.env.PORT || 10000;
