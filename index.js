@@ -4,7 +4,6 @@ import { Server } from 'socket.io';
 import { AccessToken } from 'livekit-server-sdk';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,30 +20,12 @@ const io = new Server(httpServer, {
     }
 });
 
-// Statik fayllarni ulash (app.js va style.css kabi fayllarni topish uchun)
+// Hech qanday qo'shimcha 'src'siz statik fayllarni xizmat qilamiz
 app.use(express.static(__dirname));
-app.use(express.static(path.join(__dirname, 'src')));
 
-// Bosh sahifaga kirganda index.html faylini kafolatlangan usulda qidirib topish
+// Bosh sahifaga kelgan so'rovga xuddi shu 'index.js' turgan papkadagi 'index.html'ni to'g'ridan-to'g'ri yuboramiz
 app.get('/', (req, res) => {
-    // 1-urinish: index.js bilan bir xil papkada (root)
-    let indexPath = path.join(__dirname, 'index.html');
-
-    // 2-urinish: Agar u yerda bo'lmasa, src papkasi ichidan qidirish
-    if (!fs.existsSync(indexPath)) {
-        indexPath = path.join(__dirname, 'src', 'index.html');
-    }
-
-    // 3-urinish: Agar baribir topilmasa, loyihaning umumiy ishchi katalogidan (process.cwd) qidirish
-    if (!fs.existsSync(indexPath)) {
-        indexPath = path.join(process.cwd(), 'index.html');
-    }
-    if (!fs.existsSync(indexPath)) {
-        indexPath = path.join(process.cwd(), 'src', 'index.html');
-    }
-
-    // Topilgan to'g'ri faylni brauzerga jo'natish
-    res.sendFile(indexPath);
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 const PORT = process.env.PORT || 10000;
