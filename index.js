@@ -1,15 +1,8 @@
-import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import { AccessToken } from 'livekit-server-sdk';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const { AccessToken } = require('livekit-server-sdk');
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,10 +13,10 @@ const io = new Server(httpServer, {
     }
 });
 
-// Statik fayllarni 'public' papkasi ichidan tarqatamiz
+// Statik fayllarni 'public' papkasidan xizmat qildirish
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Bosh sahifada 'public' ichidagi index.html faylini ko'rsatamiz
+// Bosh sahifa uchun public/index.html ni yuboramiz
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -38,6 +31,7 @@ const activeRooms = {};
 io.on('connection', (socket) => {
     console.log('Foydalanuvchi ulandi:', socket.id);
 
+    // Mehmon ulanishni so'raganda
     socket.on('request-join', ({ roomId, username }) => {
         const adminSocketId = activeRooms[roomId];
         if (adminSocketId) {
@@ -50,45 +44,44 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Admin mehmon bo'yicha qaror berganda
     socket.on('admin-decision', ({ socketId, decision }) => {
-        io.to(socketId).emit('join-decision', { decision });
+        io.to(socketId).emit('join-decision', { 
+            decision, 
+            message: decision === 'accept' ? null : 'Admin ruxsat bermadi.' 
+        });
     });
 
+    // Xonaga kirish mantiqi va LiveKit token generatsiyasi
     socket.on('join-room', async ({ roomId, username, role }) => {
-        try {
-            if (role === 'admin') {
-                activeRooms[roomId] = socket.id;
-            }
+        if (role === 'admin') {
+            activeRooms[roomId] = socket.id;
+        }
 
+        try {
+            // LiveKit Token tayyorlash
             const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
                 identity: username,
             });
+            at.addGrant({ roomJoin: true, room: roomId, canPublish: true, canSubscribe: true });
+            const token = at.toJwt();
 
-            at.addGrant({
-                roomJoin: true,
-                room: roomId,
-                canPublish: true,
-                canSubscribe: true,
+            socket.emit('token-ready', {
+                token,
+                roomId,
+                livekitUrl: LIVEKIT_URL
             });
-
-            const token = await at.toJwt();
-
-            socket.emit('token-ready', { 
-                token, 
-                roomId, 
-                livekitUrl: LIVEKIT_URL 
-            });
-
         } catch (error) {
-            console.error('Token yaratishda xatolik:', error);
+            console.error("Token yaratishda xato:", error);
         }
     });
 
     socket.on('disconnect', () => {
-        for (const rId in activeRooms) {
-            if (activeRooms[rId] === socket.id) {
-                delete activeRooms[rId];
-                console.log(`Admin chiqib ketdi, xona o'chirildi: ${rId}`);
+        // Agar xonani ochgan admin chiqib ketsa, uni activeRooms ro'yxatidan o'chiramiz
+        for (const [roomId, socketId] of Object.entries(activeRooms)) {
+            if (socketId === socket.id) {
+                delete activeRooms[roomId];
+                console.log(`Xona yopildi (Admin chiqdi): ${roomId}`);
             }
         }
         console.log('Foydalanuvchi uzildi:', socket.id);
