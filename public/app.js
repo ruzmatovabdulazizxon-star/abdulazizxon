@@ -1,22 +1,27 @@
-const socket = io('/');
-const videoGrid = document.getElementById('video-grid');
+const socket = io();
+
+let room = null;
+let username = null;
+let activeRoom = null; 
+let isScreenSharing = false;
+
 const lobby = document.getElementById('lobby');
-const meetContainer = document.getElementById('meet-container');
-const joinBtn = document.getElementById('join-btn');
 const usernameInput = document.getElementById('username-input');
 const roomInput = document.getElementById('room-input');
+const joinBtn = document.getElementById('join-btn');
+const meetContainer = document.getElementById('meet-container');
+const videoGrid = document.getElementById('video-grid');
 
-// Modallar
 const adminModal = document.getElementById('admin-modal');
-const guestModal = document.getElementById('guest-modal');
 const modalMessage = document.getElementById('modal-message');
-const guestModalTitle = document.getElementById('guest-modal-title');
-const guestModalMessage = document.getElementById('guest-modal-message');
 const btnAccept = document.getElementById('btn-accept');
 const btnReject = document.getElementById('btn-reject');
+
+const guestModal = document.getElementById('guest-modal');
+const guestModalTitle = document.getElementById('guest-modal-title');
+const guestModalMessage = document.getElementById('guest-modal-message');
 const btnGuestClose = document.getElementById('btn-guest-close');
 
-// Boshqaruv elementlari
 const micBtn = document.getElementById('mic-btn');
 const camBtn = document.getElementById('cam-btn');
 const screenBtn = document.getElementById('screen-btn');
@@ -27,286 +32,197 @@ const chatInput = document.getElementById('chat-input');
 const sendChatBtn = document.getElementById('send-chat-btn');
 const chatMessages = document.getElementById('chat-messages');
 
-// LiveKit o'zgaruvchilari
-let currentRoom = null;
-let currentRoomId = '';
-let currentUsername = '';
-let iAmAdmin = false;
-let pendingGuestSocketId = null;
+let pendingUserSocketId = null; 
 
-const urlRoomId = window.location.pathname.split('/')[1];
-if (urlRoomId && urlRoomId !== "") {
-    roomInput.value = urlRoomId;
-}
+joinBtn.addEventListener('click', () => {
+    username = usernameInput.value.trim();
+    room = roomInput.value.trim();
+
+    if (!username || !room) {
+        alert("Iltimos, ismingizni va xona ID raqamini kiriting!");
+        return;
+    }
+    socket.emit('request-to-join', room, username);
+});
+
+socket.on('user-awaiting-status', () => {
+    guestModalTitle.innerText = "Kutish zali";
+    guestModalMessage.innerText = "Siz kutish zalidasiz. Admin tasdiqlashi kutilmoqda...";
+    btnGuestClose.style.display = "none";
+    guestModal.style.display = "flex";
+});
+
+socket.on('user-awaiting', (data) => {
+    pendingUserSocketId = data.socketId;
+    modalMessage.innerHTML = `<b>${data.username}</b> xonaga kirish uchun ruxsat so'ramoqda.`;
+    adminModal.style.display = "flex";
+});
 
 btnAccept.addEventListener('click', () => {
-    if (pendingGuestSocketId) {
-        socket.emit('accept-user', pendingGuestSocketId, currentRoomId);
-        adminModal.style.display = 'none';
-        pendingGuestSocketId = null;
+    if (pendingUserSocketId) {
+        socket.emit('accept-user', pendingUserSocketId, room);
+        adminModal.style.display = "none";
+        pendingUserSocketId = null;
     }
 });
 
 btnReject.addEventListener('click', () => {
-    if (pendingGuestSocketId) {
-        socket.emit('reject-user', pendingGuestSocketId);
-        adminModal.style.display = 'none';
-        pendingGuestSocketId = null;
+    if (pendingUserSocketId) {
+        socket.emit('reject-user', pendingUserSocketId);
+        adminModal.style.display = "none";
+        pendingUserSocketId = null;
     }
+});
+
+socket.on('join-rejected', () => {
+    guestModalTitle.innerText = "Rad etildi";
+    guestModalMessage.innerText = "Admin sizning kirish so'rovingizni rad etdi.";
+    btnGuestClose.style.display = "block";
 });
 
 btnGuestClose.addEventListener('click', () => {
-    guestModal.style.display = 'none';
-    resetMeetingState();
+    guestModal.style.display = "none";
 });
 
-joinBtn.addEventListener('click', () => {
-    const username = usernameInput.value.trim();
-    const room = roomInput.value.trim();
-
-    if (!username || !room) {
-        alert("Iltimos, ism va xona ID sini kiriting!");
-        return;
-    }
-
-    currentUsername = username;
-    currentRoomId = room;
-    joinBtn.innerText = "So'ralmoqda...";
-    joinBtn.disabled = true;
-
-    setupApprovalLogic();
-    socket.emit('request-to-join', currentRoomId, currentUsername);
+socket.on('join-approved', async (userData) => {
+    guestModal.style.display = "none";
+    lobby.style.display = "none";
+    meetContainer.style.display = "flex";
+    await connectToLiveKit(room, username, userData.isAdmin);
 });
 
-function setupApprovalLogic() {
-    socket.off('join-approved');
-    socket.off('user-awaiting-status');
-    socket.off('join-rejected');
-    socket.off('user-awaiting');
+async function connectToLiveKit(roomName, participantName, isAdmin) {
+    try {
+        const response = await fetch('/get-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomName, participantName, isAdmin })
+        });
 
-    socket.on('join-approved', async (data) => {
-        if (data && data.isAdmin) iAmAdmin = true;
-
-        guestModal.style.display = 'none';
-        adminModal.style.display = 'none';
-        window.history.pushState({}, '', `/${currentRoomId}`);
-        lobby.style.display = 'none';
-        meetContainer.style.display = 'flex';
-
-        try {
-            // Serverdan LiveKit tokenini olamiz
-            const response = await fetch('/get-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomName: currentRoomId,
-                    participantName: currentUsername,
-                    isAdmin: iAmAdmin
-                })
-            });
-
-            const tokenData = await response.json();
-            if (tokenData.error) {
-                alert("Token olishda xatolik: " + tokenData.error);
-                resetMeetingState();
-                return;
-            }
-
-            // LiveKit xonasini yaratish va unga ulanish
-            const LiveKitJS = window.LiveKit || window.LiveKitClient;
-            if (!LiveKitJS) {
-                alert("Xatolik: LiveKit kutubxonasi yuklanmagan!");
-                resetMeetingState();
-                return;
-            }
-
-            currentRoom = new LiveKitJS.Room({
-                adaptiveStream: true,
-                dynacast: true,
-            });
-
-            // Yangi ishtirokchilar ulangandagi sozlamalar
-            currentRoom
-                .on(LiveKitJS.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                    if (track.kind === LiveKitJS.Track.Kind.Video) {
-                        const videoElement = track.attach();
-                        const labelName = participant.identity;
-                        addVideoStream(videoElement, labelName, participant.sid);
-                    } else if (track.kind === LiveKitJS.Track.Kind.Audio) {
-                        track.attach(); // Ovozni ijro etish uchun
-                    }
-                })
-                .on(LiveKitJS.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-                    track.detach();
-                    if (track.kind === LiveKitJS.Track.Kind.Video) {
-                        const existingBox = document.getElementById(participant.sid);
-                        if (existingBox) existingBox.remove();
-                    }
-                })
-                .on(LiveKitJS.RoomEvent.ParticipantDisconnected, (participant) => {
-                    const existingBox = document.getElementById(participant.sid);
-                    if (existingBox) existingBox.remove();
-                });
-
-            // LiveKit serverga ulanamiz
-            await currentRoom.connect(tokenData.serverUrl, tokenData.token);
-
-            // Kameramiz va mikrofonimizni yoqamiz (Lokal oqimlar)
-            await currentRoom.localParticipant.enableCameraAndMicrophone();
-
-            // O'zimizning videomizni ekranga chiqaramiz
-            const localVideoTrack = currentRoom.localParticipant.getTrackPublication(LiveKitJS.Track.Source.Camera);
-            if (localVideoTrack && localVideoTrack.track) {
-                const myVideoElement = localVideoTrack.track.attach();
-                myVideoElement.muted = true;
-                const myLabel = iAmAdmin ? `${currentUsername} (Admin) (Siz)` : `${currentUsername} (Siz)`;
-                addVideoStream(myVideoElement, myLabel, currentRoom.localParticipant.sid);
-            }
-
-            // Soket xonasiga ham chat uchun ulanib qo'yamiz
-            socket.emit('join-room', currentRoomId, currentRoom.localParticipant.sid, currentUsername, iAmAdmin);
-            startMeetingLogics();
-
-        } catch (err) {
-            console.error("LiveKit-ga ulanishda xato:", err);
-            alert("Xonaga ulanishda xatolik yuz berdi.");
-            resetMeetingState();
+        const data = await response.json();
+        if (data.error) {
+            alert(data.error);
+            return;
         }
-    });
 
-    socket.on('user-awaiting-status', () => {
-        guestModalTitle.innerText = "Kutish zali";
-        guestModalMessage.innerText = "Admin uchrashuvga ruxsat berishi kutilmoqda...";
-        btnGuestClose.style.display = 'none';
-        guestModal.style.display = 'flex';
-    });
+        const { token, serverUrl } = data;
 
-    socket.on('join-rejected', () => {
-        guestModalTitle.innerText = "Rad etildi";
-        guestModalMessage.innerText = "Xona egasi kirishingizga ruxsat bermadi.";
-        btnGuestClose.style.display = 'block';
-        guestModal.style.display = 'flex';
-    });
+        activeRoom = new LiveKit.Room({
+            adaptiveStream: true,
+            dynacast: true,
+        });
 
-    socket.on('user-awaiting', (data) => {
-        if (!iAmAdmin) return;
-        pendingGuestSocketId = data.socketId;
-        modalMessage.innerText = `"${data.username}" uchrashuvga kirishni so'ramoqda.`;
-        adminModal.style.display = 'flex';
-    });
+        await activeRoom.connect(serverUrl, token);
+
+        await activeRoom.localParticipant.enableCameraAndMicrophone();
+        
+        const localVideoTrackPublication = activeRoom.localParticipant.getTrackPublication(LiveKit.Track.Source.Camera);
+        if (localVideoTrackPublication && localVideoTrackPublication.videoTrack) {
+            renderVideo(localVideoTrackPublication.videoTrack, activeRoom.localParticipant.identity, true);
+        }
+
+        activeRoom.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            if (track.kind === LiveKit.Track.Kind.Video) {
+                renderVideo(track, participant.identity, false);
+            } else if (track.kind === LiveKit.Track.Kind.Audio) {
+                const audioElement = track.attach();
+                document.body.appendChild(audioElement);
+            }
+        });
+
+        activeRoom.on(LiveKit.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+            if (track.kind === LiveKit.Track.Kind.Video) {
+                const element = document.getElementById(`video-${participant.identity}`);
+                if (element) element.remove();
+            }
+        });
+
+        socket.emit('join-room', roomName, socket.id, participantName, isAdmin);
+        startChatLogics();
+
+    } catch (err) {
+        console.error("LiveKit-ga ulanishda xatolik:", err);
+    }
 }
 
-function startMeetingLogics() {
-    socket.off('receive-chat-message');
+function renderVideo(track, identity, isLocal = false) {
+    let videoBox = document.getElementById(`video-${identity}`);
+    if (!videoBox) {
+        videoBox = document.createElement('div');
+        videoBox.id = `video-${identity}`;
+        videoBox.className = 'video-box';
 
-    sendChatBtn.onclick = sendChatMessageAction;
-    chatInput.onkeydown = (e) => { if (e.key === 'Enter') sendChatMessageAction(); };
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'name-label';
+        nameLabel.innerText = isLocal ? `${identity} (Siz)` : identity;
+        videoBox.appendChild(nameLabel);
+        videoGrid.appendChild(videoBox);
+    }
+
+    const videoElement = track.attach();
+    videoElement.style.width = "100%";
+    videoElement.style.height = "100%";
+    videoElement.style.objectFit = "cover";
+    
+    if (isLocal) {
+        videoElement.style.transform = "scaleX(-1)";
+    }
+    videoBox.appendChild(videoElement);
+}
+
+function startChatLogics() {
+    socket.off('receive-chat-message');
+    
+    sendChatBtn.onclick = () => {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        socket.emit('send-chat-message', text);
+        chatInput.value = '';
+    };
+
+    chatInput.onkeypress = (e) => { if (e.key === 'Enter') sendChatBtn.click(); };
 
     socket.on('receive-chat-message', (data) => {
         const msgDiv = document.createElement('div');
-        msgDiv.classList.add('message');
-        msgDiv.innerHTML = `<b>${data.username}</b>${data.message}`;
+        msgDiv.className = 'message';
+        msgDiv.innerHTML = `<b>${data.username}</b> <span>${data.message}</span>`;
         chatMessages.appendChild(msgDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
-    micBtn.onclick = toggleMic;
-    camBtn.onclick = toggleCam;
-    screenBtn.onclick = toggleScreenShare;
+    micBtn.onclick = async () => {
+        const isMuted = activeRoom.localParticipant.isMicrophoneEnabled;
+        await activeRoom.localParticipant.setMicrophoneEnabled(!isMuted);
+        micBtn.classList.toggle('active-off', isMuted);
+        micBtn.innerHTML = isMuted ? '<i class="fa fa-microphone-slash"></i>' : '<i class="fa fa-microphone"></i>';
+    };
+
+    camBtn.onclick = async () => {
+        const isCamOn = activeRoom.localParticipant.isCameraEnabled;
+        await activeRoom.localParticipant.setCameraEnabled(!isCamOn);
+        camBtn.classList.toggle('active-off', isCamOn);
+        camBtn.innerHTML = isCamOn ? '<i class="fa fa-video-slash"></i>' : '<i class="fa fa-video"></i>';
+    };
+
+    screenBtn.onclick = async () => {
+        try {
+            await activeRoom.localParticipant.setScreenShareEnabled(!isScreenSharing);
+            isScreenSharing = !isScreenSharing;
+            screenBtn.classList.toggle('active-off', isScreenSharing);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     chatBtn.onclick = () => {
-        chatPanel.style.display = chatPanel.style.display === 'flex' ? 'none' : 'flex';
+        chatPanel.style.display = chatPanel.style.display === "flex" ? "none" : "flex";
     };
-    
+
     leaveBtn.onclick = () => {
-        if (confirm("Xonani rostdan ham tark etmoqchimisiz?")) resetMeetingState();
+        if (confirm("Uchrashuvdan chiqmoqchimisiz?")) {
+            socket.emit('leave-room-signal');
+            if (activeRoom) activeRoom.disconnect();
+            window.location.reload();
+        }
     };
-}
-
-function sendChatMessageAction() {
-    const txt = chatInput.value.trim();
-    if (txt === "") return;
-    socket.emit('send-chat-message', txt);
-    chatInput.value = "";
-}
-
-async function toggleMic() {
-    if (!currentRoom) return;
-    const isEnabled = currentRoom.localParticipant.isMicrophoneEnabled;
-    await currentRoom.localParticipant.setMicrophoneEnabled(!isEnabled);
-    micBtn.classList.toggle('active-off', isEnabled);
-    micBtn.innerHTML = !isEnabled ? '<i class="fa fa-microphone"></i>' : '<i class="fa fa-microphone-slash"></i>';
-}
-
-async function toggleCam() {
-    if (!currentRoom) return;
-    const isEnabled = currentRoom.localParticipant.isCameraEnabled;
-    await currentRoom.localParticipant.setCameraEnabled(!isEnabled);
-    camBtn.classList.toggle('active-off', isEnabled);
-    camBtn.innerHTML = !isEnabled ? '<i class="fa fa-video"></i>' : '<i class="fa fa-video-slash"></i>';
-}
-
-async function toggleScreenShare() {
-    if (!currentRoom) return;
-    const isScreenShared = currentRoom.localParticipant.isScreenShareEnabled;
-    try {
-        await currentRoom.localParticipant.setScreenShareEnabled(!isScreenShared);
-        screenBtn.classList.toggle('active-off', !isScreenShared);
-    } catch (e) {
-        console.error("Ekran ulashishda xatolik:", e);
-    }
-}
-
-function addVideoStream(videoElement, name, userId) {
-    // Agar bu foydalanuvchining video qutisi allaqachon mavjud bo'lsa, uni almashtiramiz
-    const existingBox = document.getElementById(userId);
-    if (existingBox) {
-        const oldVid = existingBox.querySelector('video');
-        if (oldVid) oldVid.replaceWith(videoElement);
-        return;
-    }
-
-    videoElement.autoplay = true;
-    videoElement.setAttribute('playsinline', 'true');
-
-    const videoBox = document.createElement('div');
-    videoBox.classList.add('video-box');
-    videoBox.id = userId;
-
-    const nameLabel = document.createElement('div');
-    nameLabel.classList.add('name-label');
-    nameLabel.innerText = name;
-
-    videoBox.appendChild(videoElement);
-    videoBox.appendChild(nameLabel);
-    videoGrid.appendChild(videoBox);
-}
-
-function resetMeetingState() {
-    if (socket) {
-        socket.emit('leave-room-signal');
-        socket.disconnect(); 
-        socket.connect(); 
-    }
-
-    if (currentRoom) {
-        currentRoom.disconnect();
-        currentRoom = null;
-    }
-
-    screenBtn.classList.remove('active-off');
-    micBtn.classList.remove('active-off');
-    camBtn.classList.remove('active-off');
-
-    videoGrid.innerHTML = '';
-    chatMessages.innerHTML = '';
-    iAmAdmin = false;
-    pendingGuestSocketId = null;
-
-    meetContainer.style.display = 'none';
-    lobby.style.display = 'block';
-    
-    joinBtn.innerText = "Uchrashuvga qo'shilish";
-    joinBtn.disabled = false;
-    
-    window.history.pushState({}, '', '/');
 }
