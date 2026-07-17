@@ -70,18 +70,18 @@ socket.on('join-decision', ({ decision, message }) => {
     }
 });
 
-// LiveKit xonasiga ulanish (Xatoliklar to'g'irlangan qism)
+// LiveKit xonasiga ulanish (To'g'rilangan versiya)
 socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
     lobby.classList.add('hidden');
     meetContainer.classList.remove('hidden');
     document.getElementById('active-room-title').innerText = roomId;
 
     try {
-        // To'g'ri ob'ekt nomi: LiveKit (LivekitClient emas)
-        roomInstance = new LiveKit.Room();
+        // CDN global obyekti aynan LiveKitClient deb nomlanadi
+        roomInstance = new LiveKitClient.Room();
         
         // Video oqimlarni eshitish
-        roomInstance.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        roomInstance.on(LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 const element = track.attach();
                 element.className = "w-full h-full object-cover rounded-lg border-2 border-gray-700";
@@ -91,7 +91,7 @@ socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
         });
 
         // Foydalanuvchi chiqib ketganda videoni tozalash
-        roomInstance.on(LiveKit.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        roomInstance.on(LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 track.detach();
                 const element = document.getElementById(`video-${participant.identity}`);
