@@ -6,9 +6,9 @@
     <title>Zoom Pro Platform</title>
     <!-- Tailwind CSS chiroyli dizayn uchun -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Socket.io kutubxonasini to'g'ridan-to'g'ri ulaymiz (404 xatosini yo'qotadi) -->
+    <!-- Socket.io kutubxonasi (CDN orqali ishonchli ulanish) -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <!-- LiveKit mijoz kutubxonasi (video/audio oqim uchun) -->
+    <!-- LiveKit mijoz kutubxonasi -->
     <script src="https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js"></script>
     <style>
         body {
@@ -41,7 +41,7 @@
         </div>
     </div>
 
-    <!-- Video uchrashuv maydoni (Boshida yashirin turadi) -->
+    <!-- Video uchrashuv maydoni -->
     <div id="meet-container" class="hidden w-full h-screen flex flex-col p-4">
         <div class="flex justify-between items-center mb-4">
             <h1 class="text-xl font-bold">Xona: <span id="active-room-title" class="text-blue-400">-</span></h1>
@@ -72,7 +72,7 @@
         </div>
     </div>
 
-    <!-- Frontend kodi (app.js) bilan bog'laymiz -->
+    <!-- Frontend mantiqiy kodi -->
     <script src="app.js"></script>
 </body>
 </html>
