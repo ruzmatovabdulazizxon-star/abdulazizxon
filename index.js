@@ -24,9 +24,13 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-const LIVEKIT_URL = process.env.LIVEKIT_URL;
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
+
+// Render'dagi LiveKit URL'ini tozalab olamiz
+let LIVEKIT_URL = process.env.LIVEKIT_URL ? process.env.LIVEKIT_URL.trim() : '';
+LIVEKIT_URL = LIVEKIT_URL.replace('wss://', '').replace('https://', '');
+
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY ? process.env.LIVEKIT_API_KEY.trim() : '';
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET ? process.env.LIVEKIT_API_SECRET.trim() : '';
 
 const activeRooms = {};
 
@@ -58,28 +62,27 @@ io.on('connection', (socket) => {
         }
 
         try {
-            // MUHIM TUXATISH: Ismlar takrorlanmasligi va xato bermasligi uchun 
-            // identity oxiriga unikal socket.id ni qo'shib qo'yamiz.
-            const uniqueIdentity = `${username}_${socket.id.substring(0, 5)}`;
+            const uniqueIdentity = `${username}_${Math.random().toString(36).substring(2, 7)}`;
 
             const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
                 identity: uniqueIdentity,
+                name: username
             });
             
             at.addGrant({ 
                 roomJoin: true, 
-                room: roomId.toString(), // ID string holatida bo'lishi shart
+                room: roomId.toString(), 
                 canPublish: true, 
                 canSubscribe: true 
             });
             
-            // Tokenni string formatida olamiz
+            // XATO SHU YERDA EDI: await olib tashlandi, chunki toJwt() sinxron funksiya
             const token = at.toJwt(); 
 
             socket.emit('token-ready', {
                 token,
                 roomId,
-                livekitUrl: LIVEKIT_URL
+                livekitUrl: `wss://${LIVEKIT_URL}` // Toza manzilda wss sxemasi
             });
         } catch (error) {
             console.error("Token yaratishda xato:", error);
@@ -90,10 +93,8 @@ io.on('connection', (socket) => {
         for (const [roomId, socketId] of Object.entries(activeRooms)) {
             if (socketId === socket.id) {
                 delete activeRooms[roomId];
-                console.log(`Xona yopildi: ${roomId}`);
             }
         }
-        console.log('Foydalanuvchi uzildi:', socket.id);
     });
 });
 
