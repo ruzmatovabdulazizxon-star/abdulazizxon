@@ -1,132 +1,103 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const { AccessToken } = require('livekit-server-sdk');
-require('dotenv').config();
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { AccessToken } from 'livekit-server-sdk';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-
-// Express va Socket.io bitta HTTP server ustida ishlashi shart!
-const server = require('http').Server(app);
-const io = require('socket.io')(server, {
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
-const PORT = process.env.PORT || 5000;
+app.use(express.static(__dirname));
 
-// Middleware sozlamalari
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+const PORT = process.env.PORT || 10000;
+const LIVEKIT_URL = process.env.LIVEKIT_URL;
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 
-// Xonadagi adminlar ro'yxati
-const roomAdmins = {}; 
+// Xonalar va ularning adminlari ro'yxati
+const activeRooms = {};
 
-// LiveKit Token yaratish API
-app.post('/get-token', async (req, res) => {
-    const { roomName, participantName, isAdmin } = req.body;
+io.on('connection', (socket) => {
+    console.log('Foydalanuvchi ulandi:', socket.id);
 
-    if (!roomName || !participantName) {
-        return res.status(400).json({ error: "Xona nomi va ism kiritilishi shart!" });
-    }
-
-    try {
-        const apiKey = process.env.LIVEKIT_API_KEY;
-        const apiSecret = process.env.LIVEKIT_API_SECRET;
-        const livekitUrl = process.env.LIVEKIT_URL || "ws://localhost:7880";
-
-        if (!apiKey || !apiSecret) {
-            return res.status(500).json({ error: "Serverda LiveKit API_KEY yoki SECRET sozlanmagan!" });
-        }
-
-        const at = new AccessToken(apiKey, apiSecret, {
-            identity: participantName,
-        });
-
-        at.addGrant({
-            roomJoin: true,
-            room: roomName,
-            canPublish: true,
-            canSubscribe: true,
-            roomAdmin: isAdmin === true, 
-        });
-
-        const token = await at.toJwt();
-
-        res.json({
-            token: token,
-            serverUrl: livekitUrl
-        });
-
-    } catch (error) {
-        console.error("LiveKit token yaratishda xatolik:", error);
-        res.status(500).json({ error: "Ichki server xatoligi yuz berdi." });
-    }
-});
-
-// Asosiy sahifa yo'nalishi
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Kutish zali mantiqi (Socket.io)
-io.on('connection', socket => {
-    let currentRoom = null;
-    let currentUsername = null;
-
-    socket.on('request-to-join', (roomId, username) => {
-        currentRoom = roomId;
-        currentUsername = username;
-
-        if (!roomAdmins[roomId]) {
-            roomAdmins[roomId] = socket.id;
-            socket.join(roomId);
-            socket.emit('join-approved', { isAdmin: true });
-        } else {
-            socket.emit('user-awaiting-status');
-            io.to(roomAdmins[roomId]).emit('user-awaiting', {
+    // Mehmon uchrashuvga kirishni so'raganda
+    socket.on('request-join', ({ roomId, username }) => {
+        const adminSocketId = activeRooms[roomId];
+        if (adminSocketId) {
+            // Admin bor bo'lsa, adminga so'rov yuboriladi
+            io.to(adminSocketId).emit('join-request-received', {
                 socketId: socket.id,
                 username: username
             });
+        } else {
+            // Agar xonada hali admin bo'lmasa
+            socket.emit('join-decision', { decision: 'reject', message: 'Uchrashuv admini hali xonaga kirmagan!' });
         }
     });
 
-    socket.on('accept-user', (guestSocketId, roomId) => {
-        io.to(guestSocketId).emit('join-approved', { isAdmin: false });
+    // Admin qaror qabul qilganda
+    socket.on('admin-decision', ({ socketId, decision }) => {
+        io.to(socketId).emit('join-decision', { decision });
     });
 
-    socket.on('reject-user', (guestSocketId) => {
-        io.to(guestSocketId).emit('join-rejected');
-    });
+    // Haqiqiy ulanish (Ruxsat berilgandan keyin yoki Admin uchun)
+    socket.on('join-room', async ({ roomId, username, role }) => {
+        try {
+            if (role === 'admin') {
+                activeRooms[roomId] = socket.id;
+            }
 
-    socket.on('join-room', (roomId, userId, username, isAdmin) => {
-        socket.join(roomId);
-        
-        socket.on('send-chat-message', (messageText) => {
-            io.to(roomId).emit('receive-chat-message', {
-                username: username,
-                message: messageText
+            // LiveKit tokenini yaratish
+            const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+                identity: username,
             });
-        });
-    });
 
-    socket.on('leave-room-signal', () => {
-        if (currentRoom && roomAdmins[currentRoom] === socket.id) {
-            delete roomAdmins[currentRoom];
+            at.addGrant({
+                roomJoin: true,
+                room: roomId,
+                canPublish: true,
+                canSubscribe: true,
+            });
+
+            const token = await at.toJwt();
+
+            // Klientga tayyor token va ulanishi kerak bo'lgan LiveKit URL yuboriladi
+            socket.emit('token-ready', { 
+                token, 
+                roomId, 
+                livekitUrl: LIVEKIT_URL 
+            });
+
+        } catch (error) {
+            console.error('Token yaratishda xatolik:', error);
         }
     });
 
     socket.on('disconnect', () => {
-        if (currentRoom && roomAdmins[currentRoom] === socket.id) {
-            delete roomAdmins[currentRoom];
+        // Agar admin chiqib ketsa, xonadan o'chiramiz
+        for (const rId in activeRooms) {
+            if (activeRooms[rId] === socket.id) {
+                delete activeRooms[rId];
+                console.log(`Admin chiqib ketdi, xona o'chirildi: ${rId}`);
+            }
         }
+        console.log('Foydalanuvchi uzildi:', socket.id);
     });
 });
 
-// Serverni ishga tushirish
-server.listen(PORT, () => {
-    console.log(`> Server http://localhost:${PORT} manzilida muvaffaqiyatli ishlamoqda.`);
+httpServer.listen(PORT, () => {
+    console.log(`Server port ${PORT} da ishlamoqda`);
 });
