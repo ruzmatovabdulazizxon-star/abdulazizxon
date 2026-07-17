@@ -1,4 +1,4 @@
-// Serverga ulanamiz (hech qanday localhost yoki qattiq manzilsiz, avtomatik hozirgi domenga ulanadi)
+// Serverga ulanamiz (avtomatik hozirgi domenga ulanadi)
 const socket = io();
 
 let currentRoom = null;
@@ -27,23 +27,21 @@ document.getElementById('join-btn').addEventListener('click', () => {
     currentRole = role;
 
     if (role === 'admin') {
-        // Admin to'g'ridan-to'g'ri xonaga kirish uchun token so'raydi
         socket.emit('join-room', { roomId, username, role });
     } else {
-        // Mehmon avval admindan ruxsat so'raydi
         guestModal.classList.remove('hidden');
         socket.emit('request-join', { roomId, username });
     }
 });
 
-// Adminga mehmon qo'shilish so'rovi kelganda
+// Admin so'rovni qabul qilganda
 socket.on('join-request-received', ({ socketId, username }) => {
     pendingUserSocketId = socketId;
     document.getElementById('requesting-user').innerText = username;
     adminModal.classList.remove('hidden');
 });
 
-// Admin qarori (Ruxsat berish)
+// Admin qarori (Ruxsat)
 document.getElementById('accept-btn').addEventListener('click', () => {
     if (pendingUserSocketId) {
         socket.emit('admin-decision', { socketId: pendingUserSocketId, decision: 'accept' });
@@ -52,7 +50,7 @@ document.getElementById('accept-btn').addEventListener('click', () => {
     }
 });
 
-// Admin qarori (Rad etish)
+// Admin qarori (Rad)
 document.getElementById('reject-btn').addEventListener('click', () => {
     if (pendingUserSocketId) {
         socket.emit('admin-decision', { socketId: pendingUserSocketId, decision: 'reject' });
@@ -61,7 +59,7 @@ document.getElementById('reject-btn').addEventListener('click', () => {
     }
 });
 
-// Mehmon ruxsat javobini olganda
+// Mehmon javob olganda
 socket.on('join-decision', ({ decision, message }) => {
     guestModal.classList.add('hidden');
     if (decision === 'accept') {
@@ -72,17 +70,18 @@ socket.on('join-decision', ({ decision, message }) => {
     }
 });
 
-// Token tayyor bo'lganda, Livekit xonasiga ulanamiz
+// LiveKit xonasiga ulanish (Xatoliklar to'g'irlangan qism)
 socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
     lobby.classList.add('hidden');
     meetContainer.classList.remove('hidden');
     document.getElementById('active-room-title').innerText = roomId;
 
     try {
-        roomInstance = new LivekitClient.Room();
+        // To'g'ri ob'ekt nomi: LiveKit (LivekitClient emas)
+        roomInstance = new LiveKit.Room();
         
-        // Video va audio kelganda ekranga chiqarish
-        roomInstance.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        // Video oqimlarni eshitish
+        roomInstance.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 const element = track.attach();
                 element.className = "w-full h-full object-cover rounded-lg border-2 border-gray-700";
@@ -91,8 +90,8 @@ socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
             }
         });
 
-        // Foydalanuvchi uchrashuvdan chiqqanda uning videosini o'chirish
-        roomInstance.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        // Foydalanuvchi chiqib ketganda videoni tozalash
+        roomInstance.on(LiveKit.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             if (track.kind === 'video') {
                 track.detach();
                 const element = document.getElementById(`video-${participant.identity}`);
@@ -100,13 +99,13 @@ socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
             }
         });
 
-        // Xonaga ulanish
+        // Livekit serveriga ulanish
         await roomInstance.connect(livekitUrl, token);
 
-        // O'z kameramiz va mikrofoni yoqamiz
+        // Kamera va mikrofonni ishga tushirish
         await roomInstance.localParticipant.enableCameraAndMicrophone();
 
-        // O'z videomizni ham ekranga chiqarish
+        // O'z kameramizni ekranga joylash
         const localVideo = document.createElement('video');
         localVideo.muted = true;
         localVideo.className = "w-full h-full object-cover rounded-lg border-2 border-blue-500";
@@ -125,7 +124,7 @@ socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
     }
 });
 
-// Chiqish tugmasi
+// Chiqish tugmasi mantiqi
 document.getElementById('leave-btn').addEventListener('click', () => {
     if (roomInstance) {
         roomInstance.disconnect();
