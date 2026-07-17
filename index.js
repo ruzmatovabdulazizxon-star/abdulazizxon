@@ -20,7 +20,13 @@ const io = new Server(httpServer, {
     }
 });
 
+// Statik fayllarni (app.js va boshqalar) yuklash uchun ruxsat
 app.use(express.static(__dirname));
+
+// Bosh sahifaga so'rov kelganda aniq index.html ni yuboramiz (Cannot GET xatosini yo'qotadi)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 const PORT = process.env.PORT || 10000;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
@@ -37,13 +43,11 @@ io.on('connection', (socket) => {
     socket.on('request-join', ({ roomId, username }) => {
         const adminSocketId = activeRooms[roomId];
         if (adminSocketId) {
-            // Admin bor bo'lsa, adminga so'rov yuboriladi
             io.to(adminSocketId).emit('join-request-received', {
                 socketId: socket.id,
                 username: username
             });
         } else {
-            // Agar xonada hali admin bo'lmasa
             socket.emit('join-decision', { decision: 'reject', message: 'Uchrashuv admini hali xonaga kirmagan!' });
         }
     });
@@ -87,7 +91,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // Agar admin chiqib ketsa, xonadan o'chiramiz
         for (const rId in activeRooms) {
             if (activeRooms[rId] === socket.id) {
                 delete activeRooms[rId];
