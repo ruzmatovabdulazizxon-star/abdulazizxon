@@ -21,32 +21,29 @@ const io = new Server(httpServer, {
     }
 });
 
-// Statik fayllar (app.js, style.css) uchun ruxsat
+// Statik fayllarni ulash (app.js va style.css kabi fayllarni topish uchun)
 app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'src')));
 
-// Bosh sahifaga so'rov kelganda index.html ni to'g'ri yo'l orqali yuboramiz
+// Bosh sahifaga kirganda index.html faylini kafolatlangan usulda qidirib topish
 app.get('/', (req, res) => {
+    // 1-urinish: index.js bilan bir xil papkada (root)
     let indexPath = path.join(__dirname, 'index.html');
 
-    // Agar hozirgi papkada index.html bo'lmasa, uning atrofini tekshiramiz (lekin src/src bo'lib ketishini oldini olamiz)
+    // 2-urinish: Agar u yerda bo'lmasa, src papkasi ichidan qidirish
     if (!fs.existsSync(indexPath)) {
-        if (__dirname.endsWith('src')) {
-            // Agar allaqachon src ichida bo'lsak, orqaga qaytib tekshiramiz
-            indexPath = path.join(__dirname, '..', 'index.html');
-        } else {
-            // Agar tashqarida bo'lsak, ichkaridan qidiramiz
-            indexPath = path.join(__dirname, 'src', 'index.html');
-        }
+        indexPath = path.join(__dirname, 'src', 'index.html');
     }
 
-    // Agar baribir topilmasa, ishchi katalogdan (CWD) qidiramiz
+    // 3-urinish: Agar baribir topilmasa, loyihaning umumiy ishchi katalogidan (process.cwd) qidirish
     if (!fs.existsSync(indexPath)) {
         indexPath = path.join(process.cwd(), 'index.html');
     }
-    if (!fs.existsSync(indexPath) && !process.cwd().endsWith('src')) {
+    if (!fs.existsSync(indexPath)) {
         indexPath = path.join(process.cwd(), 'src', 'index.html');
     }
 
+    // Topilgan to'g'ri faylni brauzerga jo'natish
     res.sendFile(indexPath);
 });
 
