@@ -4,75 +4,89 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zoom Pro Platform</title>
-    <!-- Tailwind CSS chiroyli dizayn uchun -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Socket.io kutubxonasi (CDN orqali ishonchli ulanish) -->
+    <!-- Socket.io CDN -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <!-- LiveKit mijoz kutubxonasi -->
-    <script src="https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js"></script>
-    <style>
-        body {
-            background-color: #0d0e12;
-            color: #ffffff;
-        }
-    </style>
+    <!-- Barqaror va Mos Keluvchi LiveKit Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.4/dist/livekit-client.umd.min.js"></script>
 </head>
-<body class="min-h-screen flex flex-col justify-center items-center overflow-hidden">
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center font-sans">
 
-    <!-- Kirish oynasi (Lobby) -->
-    <div id="lobby" class="bg-[#1a1c23] p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-800">
-        <h2 class="text-2xl font-bold mb-6 text-center text-white">Uchrashuvga qo'shilish</h2>
+    <!-- LOBBY (KIRISH CHOG'I) -->
+    <div id="lobby" class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
+        <h2 class="text-2xl font-bold text-center mb-6 text-blue-500">Uchrashuvga qo'shilish</h2>
+        
         <div class="space-y-4">
             <div>
-                <input type="text" id="username" placeholder="Ismingizni kiriting..." class="w-full px-4 py-3 bg-[#242731] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors">
+                <label class="block text-sm font-medium text-gray-400 mb-1">Ismingiz</label>
+                <input type="text" id="username" placeholder="Ismingizni kiriting" 
+                    class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
+
             <div>
-                <input type="text" id="room-id" placeholder="Xona ID (masalan: room123)" class="w-full px-4 py-3 bg-[#242731] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors">
+                <label class="block text-sm font-medium text-gray-400 mb-1">Xona ID (Room ID)</label>
+                <input type="text" id="room-id" placeholder="Xona ID-sini kiriting" 
+                    class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
+
             <div>
-                <select id="role" class="w-full px-4 py-3 bg-[#242731] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors">
-                    <option value="guest">Mehmon (Guest)</option>
-                    <option value="admin">Admin</option>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Rolingiz</label>
+                <select id="role" class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="admin">Admin (Xona yaratuvchi)</option>
+                    <option value="guest">Mehmon (Ulanuvchi)</option>
                 </select>
             </div>
-            <button id="join-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors focus:outline-none">
+
+            <button id="join-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-200 mt-2 shadow-lg">
                 Kirish
             </button>
         </div>
     </div>
 
-    <!-- Video uchrashuv maydoni -->
-    <div id="meet-container" class="hidden w-full h-screen flex flex-col p-4">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-xl font-bold">Xona: <span id="active-room-title" class="text-blue-400">-</span></h1>
-            <button id="leave-btn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-bold transition-colors">Chiqish</button>
+    <!-- MEET CONTAINER (VIDEO XONA INTERFEYSI) -->
+    <div id="meet-container" class="hidden w-full h-screen flex flex-col p-4 bg-gray-950">
+        <!-- Yuqori qism (Header) -->
+        <div class="flex justify-between items-center bg-gray-900 p-4 rounded-xl mb-4 border border-gray-800 shadow-md">
+            <h1 class="text-xl font-bold">Xona: <span id="active-room-title" class="text-blue-400">---</span></h1>
+            <button id="leave-btn" class="px-6 py-2 bg-red-600 hover:bg-red-700 font-semibold rounded-lg transition duration-200 shadow-md">
+                Chiqish
+            </button>
         </div>
-        <div id="video-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center bg-[#16181f] rounded-xl p-4 overflow-y-auto">
-            <!-- Videolar shu yerga tushadi -->
+
+        <!-- Video Grid (Kameralar joylashadigan joy) -->
+        <div id="video-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-2 auto-rows-fr">
+            <!-- Videolar dinamik tarzda JavaScript orqali shu yerga qo'shiladi -->
         </div>
     </div>
 
-    <!-- Admin uchun: Ruxsat so'rash oynasi (Modal) -->
-    <div id="admin-modal" class="hidden fixed inset-0 bg-black/70 flex justify-center items-center z-50">
-        <div class="bg-[#1a1c23] p-6 rounded-xl border border-gray-800 max-w-sm w-full text-center">
-            <h3 class="text-lg font-bold mb-4 text-white"><span id="requesting-user" class="text-blue-400">Kimdir</span> xonaga kirmoqchi</h3>
-            <div class="flex justify-center space-x-4">
-                <button id="accept-btn" class="bg-emerald-600 hover:bg-emerald-700 px-6 py-2 rounded-lg font-bold transition-colors">Ruxsat berish</button>
-                <button id="reject-btn" class="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold transition-colors">Rad etish</button>
+    <!-- ADMIN MODAL (KIRISH SO'ROVLARINI BOSHQARISH) -->
+    <div id="admin-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center animate-fade-in">
+            <h3 class="text-xl font-semibold mb-4 text-yellow-500">Yangi so'rov</h3>
+            <p class="text-gray-300 mb-6"><span id="requesting-user" class="font-bold text-white">...</span> xonaga kirmoqchi</p>
+            <div class="flex gap-4 justify-center">
+                <button id="accept-btn" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 font-medium rounded-lg transition duration-150">
+                    Ruxsat berish
+                </button>
+                <button id="reject-btn" class="px-6 py-2 bg-disabled bg-red-600 hover:bg-red-700 font-medium rounded-lg transition duration-150">
+                    Rad etish
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Mehmon uchun: Kutish oynasi (Modal) -->
-    <div id="guest-modal" class="hidden fixed inset-0 bg-black/80 flex justify-center items-center z-50">
-        <div class="bg-[#1a1c23] p-8 rounded-xl border border-gray-800 text-center">
+    <!-- MEHMON MODAL (KUTISH OYNASI) -->
+    <div id="guest-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
+            <!-- Spinner yuklanish belgisi -->
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <h3 class="text-lg font-bold text-white">Iltimos, kuting...</h3>
-            <p class="text-gray-400 mt-2">Admin sizni xonaga kiritishini kutmoqdasiz.</p>
+            <h3 class="text-xl font-semibold mb-2 text-white">Iltimos, kuting...</h3>
+            <p class="text-gray-400 text-sm">Admin sizni xonaga kiritishini kutmoqdasiz.</p>
         </div>
     </div>
 
-    <!-- Frontend mantiqiy kodi -->
+    <!-- Client-side mantiq fayli -->
     <script src="app.js"></script>
 </body>
 </html>
