@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { AccessToken } from 'livekit-server-sdk';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,12 +21,25 @@ const io = new Server(httpServer, {
     }
 });
 
-// Statik fayllarni (app.js va boshqalar) yuklash uchun ruxsat
+// Statik fayllarni ulash
 app.use(express.static(__dirname));
 
-// Bosh sahifaga so'rov kelganda aniq index.html ni yuboramiz (Cannot GET xatosini yo'qotadi)
+// Bosh sahifaga kirganda index.html faylini topib yuborish mantiqi (src yoki root'dan qidiradi)
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    let indexPath = path.join(__dirname, 'index.html');
+    
+    // Agar fayl hozirgi papkada topilmasa, bir daraja yuqorini yoki pastni (src'ni) tekshiramiz
+    if (!fs.existsSync(indexPath)) {
+        indexPath = path.join(__dirname, 'src', 'index.html');
+    }
+    if (!fs.existsSync(indexPath)) {
+        indexPath = path.join(process.cwd(), 'index.html');
+    }
+    if (!fs.existsSync(indexPath)) {
+        indexPath = path.join(process.cwd(), 'src', 'index.html');
+    }
+
+    res.sendFile(indexPath);
 });
 
 const PORT = process.env.PORT || 10000;
@@ -33,13 +47,11 @@ const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
 
-// Xonalar va ularning adminlari ro'yxati
 const activeRooms = {};
 
 io.on('connection', (socket) => {
     console.log('Foydalanuvchi ulandi:', socket.id);
 
-    // Mehmon uchrashuvga kirishni so'raganda
     socket.on('request-join', ({ roomId, username }) => {
         const adminSocketId = activeRooms[roomId];
         if (adminSocketId) {
@@ -52,19 +64,16 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Admin qaror qabul qilganda
     socket.on('admin-decision', ({ socketId, decision }) => {
         io.to(socketId).emit('join-decision', { decision });
     });
 
-    // Haqiqiy ulanish (Ruxsat berilgandan keyin yoki Admin uchun)
     socket.on('join-room', async ({ roomId, username, role }) => {
         try {
             if (role === 'admin') {
                 activeRooms[roomId] = socket.id;
             }
 
-            // LiveKit tokenini yaratish
             const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
                 identity: username,
             });
@@ -78,7 +87,6 @@ io.on('connection', (socket) => {
 
             const token = await at.toJwt();
 
-            // Klientga tayyor token va ulanishi kerak bo'lgan LiveKit URL yuboriladi
             socket.emit('token-ready', { 
                 token, 
                 roomId, 
