@@ -1,8 +1,9 @@
-const express = require('express');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-const { AccessToken } = require('livekit-server-sdk');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { AccessToken } from 'livekit-server-sdk';
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,6 +13,10 @@ const io = new Server(httpServer, {
         methods: ["GET", "POST"]
     }
 });
+
+// __dirname ni ES Modules muhitida olish
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Statik fayllarni 'public' papkasidan xizmat qildirish
 app.use(express.static(path.join(__dirname, 'public')));
@@ -64,7 +69,7 @@ io.on('connection', (socket) => {
                 identity: username,
             });
             at.addGrant({ roomJoin: true, room: roomId, canPublish: true, canSubscribe: true });
-            const token = at.toJwt();
+            const token = await at.toJwt(); // ES Module formatida asinxron ishlashi ishonchliroq
 
             socket.emit('token-ready', {
                 token,
