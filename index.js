@@ -21,21 +21,29 @@ const io = new Server(httpServer, {
     }
 });
 
-// Statik fayllarni ulash
+// Statik fayllar (app.js, style.css) uchun ruxsat
 app.use(express.static(__dirname));
 
-// Bosh sahifaga kirganda index.html faylini topib yuborish mantiqi (src yoki root'dan qidiradi)
+// Bosh sahifaga so'rov kelganda index.html ni to'g'ri yo'l orqali yuboramiz
 app.get('/', (req, res) => {
     let indexPath = path.join(__dirname, 'index.html');
-    
-    // Agar fayl hozirgi papkada topilmasa, bir daraja yuqorini yoki pastni (src'ni) tekshiramiz
+
+    // Agar hozirgi papkada index.html bo'lmasa, uning atrofini tekshiramiz (lekin src/src bo'lib ketishini oldini olamiz)
     if (!fs.existsSync(indexPath)) {
-        indexPath = path.join(__dirname, 'src', 'index.html');
+        if (__dirname.endsWith('src')) {
+            // Agar allaqachon src ichida bo'lsak, orqaga qaytib tekshiramiz
+            indexPath = path.join(__dirname, '..', 'index.html');
+        } else {
+            // Agar tashqarida bo'lsak, ichkaridan qidiramiz
+            indexPath = path.join(__dirname, 'src', 'index.html');
+        }
     }
+
+    // Agar baribir topilmasa, ishchi katalogdan (CWD) qidiramiz
     if (!fs.existsSync(indexPath)) {
         indexPath = path.join(process.cwd(), 'index.html');
     }
-    if (!fs.existsSync(indexPath)) {
+    if (!fs.existsSync(indexPath) && !process.cwd().endsWith('src')) {
         indexPath = path.join(process.cwd(), 'src', 'index.html');
     }
 
