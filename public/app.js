@@ -37,7 +37,7 @@ joinBtn.addEventListener('click', () => {
     }
 });
 
-// Admin so'rovni qabul qilganda yoki rad etganda
+// Admin so'rovni qabul qilganda
 socket.on('join-request-received', ({ socketId, username }) => {
     currentRequestSocketId = socketId;
     modalText.innerText = `${username} uchrashuvga kirmoqchi. Ruxsat berasizmi?`;
@@ -61,26 +61,27 @@ document.getElementById('btn-reject').addEventListener('click', () => {
 });
 
 // Mehmon javobni olganda
-socket.on('join-decision', ({ decision, roomId, username }) => {
+socket.on('join-decision', ({ decision, message }) => {
     guestModal.style.display = 'none';
     if (decision === 'accept') {
+        const username = usernameInput.value.trim();
+        const roomId = roomIdInput.value.trim();
         socket.emit('join-room', { roomId, username, role: 'guest' });
     } else {
-        alert('Admin xonaga kirishingizni rad etdi!');
+        alert(message || 'Admin xonaga kirishingizni rad etdi!');
     }
 });
 
-// Token olinganda LiveKit serverga ulanish
-socket.on('token-ready', async ({ token, roomId }) => {
+// Token va LiveKit URL olinganda ulanish
+socket.on('token-ready', async ({ token, roomId, livekitUrl }) => {
     lobby.style.display = 'none';
     meetContainer.style.display = 'flex';
-    await connectToLiveKit(token);
+    await connectToLiveKit(token, livekitUrl);
 });
 
-// LiveKit ulanish funksiyasi
-async function connectToLiveKit(token) {
+// LiveKit-ga ulanish funksiyasi
+async function connectToLiveKit(token, livekitUrl) {
     try {
-        // CDN orqali yuklanganda LiveKit obyekti LivekitClient ichida bo'ladi
         const LK = window.LivekitClient || window.LiveKit;
         if (!LK) {
             throw new Error("LiveKit Client SDK yuklanmadi!");
@@ -91,7 +92,7 @@ async function connectToLiveKit(token) {
             dynacast: true,
         });
 
-        // Masofaviy foydalanuvchilar ulanganda
+        // Masofaviy ishtirokchilar ulanganda videoni ko'rsatish
         currentRoom.on(LK.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if (track.kind === LK.Track.Kind.Video || track.kind === LK.Track.Kind.Audio) {
                 const element = track.attach();
@@ -99,7 +100,7 @@ async function connectToLiveKit(token) {
             }
         });
 
-        // Kimdir kamerani o'chirsa yoki chiqib ketsa
+        // Ishtirokchi uzilganda
         currentRoom.on(LK.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             track.detach();
             const elements = videoGrid.querySelectorAll('video, audio');
@@ -110,11 +111,10 @@ async function connectToLiveKit(token) {
             });
         });
 
-        // Loyihamiz o'rnatilgan Render manziliga ulanamiz (Environment'dan kelgan URL bilan server ulaydi)
-        // Klient faqat token ichidagi server manziliga ulanadi
-        await currentRoom.connect(window.location.origin.replace('http', 'ws'), token);
+        // To'g'ridan-to'g'ri serverdan kelgan LiveKit Cloud URL-ga ulanamiz!
+        await currentRoom.connect(livekitUrl, token);
 
-        // O'zimizning kamera va mikronimizni yoqamiz
+        // Kamera va mikrofonni ulash
         localTracks = await LK.createLocalTracks({ audio: true, video: true });
         for (const track of localTracks) {
             await currentRoom.localParticipant.publishTrack(track);
@@ -152,7 +152,7 @@ document.getElementById('toggle-cam').addEventListener('click', async () => {
     if (videoTrack) {
         if (videoTrack.isMuted) {
             await videoTrack.unmute();
-            document.getElementById('toggle-cam').innerText = 'ca📹';
+            document.getElementById('toggle-cam').innerText = '📹';
         } else {
             await videoTrack.mute();
             document.getElementById('toggle-cam').innerText = '🚫';
