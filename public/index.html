@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Socket.io CDN -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <!-- Barqaror va Mos Keluvchi LiveKit Client CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.4/dist/livekit-client.umd.min.js"></script>
+    <!-- Eng barqaror LiveKit Client CDN (Umd format o'rniga to'g'ridan-to'g'ri global) -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.4/dist/livekit-client.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center font-sans">
 
@@ -46,7 +46,7 @@
 
     <!-- MEET CONTAINER (VIDEO XONA INTERFEYSI) -->
     <div id="meet-container" class="hidden w-full h-screen flex flex-col p-4 bg-gray-950">
-        <!-- Yuqori qism (Header) -->
+        <!-- Yuqori panel -->
         <div class="flex justify-between items-center bg-gray-900 p-4 rounded-xl mb-4 border border-gray-800 shadow-md">
             <h1 class="text-xl font-bold">Xona: <span id="active-room-title" class="text-blue-400">---</span></h1>
             <button id="leave-btn" class="px-6 py-2 bg-red-600 hover:bg-red-700 font-semibold rounded-lg transition duration-200 shadow-md">
@@ -54,39 +54,55 @@
             </button>
         </div>
 
-        <!-- Video Grid (Kameralar joylashadigan joy) -->
+        <!-- Video oqimlar tarmog'i -->
         <div id="video-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-2 auto-rows-fr">
-            <!-- Videolar dinamik tarzda JavaScript orqali shu yerga qo'shiladi -->
+            <!-- Videolar shu yerga yuklanadi -->
+        </div>
+
+        <!-- PASTKI BOSHQARUV PANELI (KAMERA, MIKROFON, EKRAN SHARING TUGMALARI) -->
+        <div class="flex justify-center items-center gap-4 bg-gray-900 p-4 rounded-xl mt-4 border border-gray-800 shadow-md">
+            <!-- Mikrofon tugmasi -->
+            <button id="toggle-mic-btn" class="px-5 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition duration-200 shadow-md flex items-center gap-2">
+                <span>🎤 Mik: Yoqilgan</span>
+            </button>
+            
+            <!-- Kamera tugmasi -->
+            <button id="toggle-cam-btn" class="px-5 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition duration-200 shadow-md flex items-center gap-2">
+                <span>📷 Kam: Yoqilgan</span>
+            </button>
+
+            <!-- Ekran ulashish tugmasi -->
+            <button id="share-screen-btn" class="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition duration-200 shadow-md flex items-center gap-2">
+                <span>🖥️ Ekran ulashish</span>
+            </button>
         </div>
     </div>
 
-    <!-- ADMIN MODAL (KIRISH SO'ROVLARINI BOSHQARISH) -->
+    <!-- ADMIN MODAL -->
     <div id="admin-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center animate-fade-in">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
             <h3 class="text-xl font-semibold mb-4 text-yellow-500">Yangi so'rov</h3>
             <p class="text-gray-300 mb-6"><span id="requesting-user" class="font-bold text-white">...</span> xonaga kirmoqchi</p>
             <div class="flex gap-4 justify-center">
                 <button id="accept-btn" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 font-medium rounded-lg transition duration-150">
                     Ruxsat berish
                 </button>
-                <button id="reject-btn" class="px-6 py-2 bg-disabled bg-red-600 hover:bg-red-700 font-medium rounded-lg transition duration-150">
+                <button id="reject-btn" class="px-6 py-2 bg-red-600 hover:bg-red-700 font-medium rounded-lg transition duration-150">
                     Rad etish
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- MEHMON MODAL (KUTISH OYNASI) -->
+    <!-- MEHMON MODAL -->
     <div id="guest-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 text-center">
-            <!-- Spinner yuklanish belgisi -->
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <h3 class="text-xl font-semibold mb-2 text-white">Iltimos, kuting...</h3>
             <p class="text-gray-400 text-sm">Admin sizni xonaga kiritishini kutmoqdasiz.</p>
         </div>
     </div>
 
-    <!-- Client-side mantiq fayli -->
     <script src="app.js"></script>
 </body>
 </html>
