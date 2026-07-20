@@ -7,8 +7,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const apiKey = 'APIUtixpKkmDo25';
-const apiSecret = 'PL2oghVY4HyeffCihl3t18sxMMIfjgaRRV14eHEUYVTB';
+// Render Environment Variables'dan o'qiydi yoki zahira kalitlarni oladi
+const apiKey = process.env.LIVEKIT_API_KEY || 'APIUtixpKkmDo25';
+const apiSecret = process.env.LIVEKIT_API_SECRET || 'PL2oghVY4HyeffCihl3t18sxMMIfjgaRRV14eHEUYVTB';
 
 app.post('/api/get-token', async (req, res) => {
   const { roomName, participantName } = req.body;
@@ -18,9 +19,10 @@ app.post('/api/get-token', async (req, res) => {
   }
 
   try {
+    // AccessToken obyektini to'g'ri konfiguratsiya bilan yaratish
     const at = new AccessToken(apiKey, apiSecret, {
       identity: participantName,
-      ttl: '10h',
+      name: participantName,
     });
 
     at.addGrant({
@@ -28,6 +30,7 @@ app.post('/api/get-token', async (req, res) => {
       room: roomName,
       canPublish: true,
       canSubscribe: true,
+      canPublishData: true,
     });
 
     const token = await at.toJwt();
