@@ -11,6 +11,7 @@ async function joinRoom() {
   }
 
   try {
+    // 1. Backend'dan token olish
     const response = await fetch('/api/get-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -19,33 +20,42 @@ async function joinRoom() {
 
     const data = await response.json();
     if (!data.token) {
-      alert("Token olinmadi!");
+      alert("Token olinmadi: " + (data.error || "Noma'lum xatolik"));
       return;
     }
 
+    // 2. Interfeysni o'zgartirish
     document.getElementById('join-card').style.display = 'none';
     document.getElementById('room').style.display = 'flex';
 
-    const room = new LivekitClient.Room({
-      adaptiveStream: true,
-      dynacast: true,
-    });
-
+    // 3. Room obyektini yaratish
+    const room = new LivekitClient.Room();
     currentRoom = room;
 
+    // Stream ulanganida videoni ekranga chiqarish
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-      const element = track.attach();
-      element.id = `track-${publication.trackSid}`;
-      document.getElementById('video-grid').appendChild(element);
+      if (track.kind === LivekitClient.Track.Kind.Video || track.kind === LivekitClient.Track.Kind.Audio) {
+        const element = track.attach();
+        element.id = `track-${publication.trackSid}`;
+        element.style.width = '100%';
+        element.style.height = '100%';
+        element.style.objectFit = 'cover';
+        document.getElementById('video-grid').appendChild(element);
+      }
     });
 
+    // Stream uzilganda o'chirish
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
       track.detach().forEach(el => el.remove());
     });
 
+    // 4. LiveKit Serverga ulanish
     await room.connect(LIVEKIT_URL, data.token);
+
+    // 5. Kamera va mikrofoni yoqish
     await room.localParticipant.enableCameraAndMicrophone();
 
+    // O'zimizning kameramizni ekranga chiqarish
     room.localParticipant.videoTrackPublications.forEach((publication) => {
       if (publication.track) {
         const element = publication.track.attach();
