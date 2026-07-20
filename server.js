@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Kalitlarni process.env orqali yoki to'g'ridan-to'g'ri o'qish
+// Kalitlarni process.env orqali o'qish
 const apiKey = process.env.LIVEKIT_API_KEY || 'APIUtixpKkmDo25';
 const apiSecret = process.env.LIVEKIT_API_SECRET || 'PL2oghVY4HyeffCihl3t18sxMMIfjgaRRV14eHEUYVTB';
 
@@ -19,11 +19,10 @@ app.post('/api/get-token', async (req, res) => {
   }
 
   try {
-    // LiveKit AccessToken obyekti
     const at = new AccessToken(apiKey, apiSecret, {
       identity: participantName,
       name: participantName,
-      ttl: '10h', // Token amal qilish muddati
+      ttl: '10h',
     });
 
     at.addGrant({
@@ -35,7 +34,6 @@ app.post('/api/get-token', async (req, res) => {
     });
 
     const token = await at.toJwt();
-    console.log("Token muvaffaqiyatli yaratildi:", token);
     res.json({ token });
   } catch (err) {
     console.error('Token yaratishda xatolik:', err);
@@ -45,5 +43,5 @@ app.post('/api/get-token', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Backend server ishga tushdi: port ${PORT}`);
+  console.log(`Backend server ishga tushdi: http://localhost:${PORT}`);
 });
